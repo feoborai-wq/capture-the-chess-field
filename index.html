@@ -8,8 +8,7 @@
 <title>Field Chess — шахматная дуэль на выставление</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prata&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/trystero@0.21/dist/trystero-nostr.min.js"></script>
-<script>if(!window.trystero){document.write('<script src="https://unpkg.com/trystero@0.21/dist/trystero-nostr.min.js"><\/script>');}</script>
+<script src="https://cdn.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js"></script>
 <style>
 :root{
   color-scheme:only light;
@@ -457,13 +456,14 @@ ru:{
   netConnected:(name)=>'соединено · вы играете за '+name,
   netCreating:'создаём комнату…',
   netJoining:(code)=>'подключаемся к комнате '+code+'…',
+  netLibLoading:'загружаем библиотеку связи…',
   netSrvFail:'Сервис связи не отвечает. Проверьте интернет (иногда помогает VPN) и попробуйте снова.',
   netJoinFail:'Не удалось подключиться: комната не найдена или сервис связи недоступен. Проверьте код и попробуйте снова.',
   netNoRoom:'Комната не найдена — проверьте код',
   netRoomBusy:'Комната уже занята — создайте новую',
   netOffline:'Нет доступа к интернету',
   netNeedCode:'Введите код комнаты — 4–5 символов',
-  netLibFail:'Библиотека связи не загрузилась (нет интернета или её режет блокировщик). Обновите страницу или откройте по https-ссылке.',
+  netLibFail:'Библиотека связи не загрузилась ни с одного из четырёх зеркал (нет интернета или её режет блокировщик/VPN). Обновите страницу и попробуйте снова.',
   netSrvShort:'Сервис связи недоступен — проверьте интернет или попробуйте позже',
   netWebRTC:'Не удалось установить прямое соединение',
   netIncompat:'Браузер не поддерживает WebRTC',
@@ -555,13 +555,14 @@ en:{
   netConnected:(name)=>'connected · you play '+name,
   netCreating:'creating a room…',
   netJoining:(code)=>'joining room '+code+'…',
+  netLibLoading:'loading the relay library…',
   netSrvFail:'Relay service is not responding. Check your internet (a VPN sometimes helps) and try again.',
   netJoinFail:'Could not connect: room not found or relay unavailable. Check the code and try again.',
   netNoRoom:'Room not found — check the code',
   netRoomBusy:'Room is already occupied — create a new one',
   netOffline:'No internet access',
   netNeedCode:'Enter the room code — 4–5 characters',
-  netLibFail:'The relay library failed to load (no internet or a blocker). Refresh the page or open via an https link.',
+  netLibFail:'The relay library failed to load from all four mirrors (no internet or a blocker/VPN). Refresh the page and try again.',
   netSrvShort:'Relay service unavailable — check your internet or try later',
   netWebRTC:'Could not establish a direct connection',
   netIncompat:'Browser does not support WebRTC',
@@ -649,7 +650,43 @@ let counts, totals, mode='pvp', starter=0;
 let hoverIdx=-1, previewIdx=-1;
 const canHover=window.matchMedia&&matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-/* ═══ Сеть: Trystero через Nostr-релеи ═══ */
+/* ═══ Сеть: Trystero + Nostr-релеи ════════ */
+const NET_RELAYS=[
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://relay.snort.social',
+  'wss://nostr-pub.wellorder.net'
+];
+const NET_URLS=[
+  'https://cdn.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js',
+  'https://unpkg.com/trystero/dist/trystero-nostr.min.js',
+  'https://cdn.jsdelivr.net/npm/trystero@0.20.0/dist/trystero-nostr.min.js',
+  'https://cdn.jsdelivr.net/gh/dmotz/trystero/dist/trystero-nostr.min.js'
+];
+let netLibPromise=null;
+function libReady(){return !!(window.trystero&&window.trystero.joinRoom);}
+function loadNetLib(){
+  if(libReady())return Promise.resolve(true);
+  if(netLibPromise)return netLibPromise;
+  netLibPromise=(async()=>{
+    for(const url of NET_URLS){
+      const ok=await new Promise(res=>{
+        let settled=false;
+        const s=document.createElement('script');
+        s.src=url;s.async=true;
+        const finish=v=>{if(settled)return;settled=true;res(v);};
+        s.onload=()=>finish(libReady());
+        s.onerror=()=>finish(false);
+        document.head.appendChild(s);
+        setTimeout(()=>finish(libReady()),12000);
+      });
+      if(ok)return true;
+    }
+    return false;
+  })();
+  return netLibPromise;
+}
 const net={room:null,send:null,unsubs:[],role:'host',mySide:0,code:'',connected:false,
            creating:false,joining:false,to:null,hintTo:null,cfgTo:null,peerId:null,gotCfg:false};
 let pendingReq=false, lastSeen=0, pingTimer=null;
@@ -682,11 +719,6 @@ function netFail(msg){
   if(net.cfgTo){clearTimeout(net.cfgTo);net.cfgTo=null;}
   netIdle();
   netErr(msg);
-}
-function ensureNetLib(){
-  if(window.trystero&&window.trystero.joinRoom)return true;
-  netFail(T.netLibFail);
-  return false;
 }
 function stopPing(){if(pingTimer){clearInterval(pingTimer);pingTimer=null;}}
 function startPing(){
@@ -810,16 +842,20 @@ function proposeNew(){
   netSend({t:'newreq'});pendingReq=true;
   toast(T.netSent);
 }
-function netCreate(){
-  if(!ensureNetLib())return;
+async function netCreate(){
   if(!navigator.onLine){netFail(T.netOffline);return;}
+  if(!libReady()){
+    netBusy(T.netLibLoading);
+    const ok=await loadNetLib();
+    if(!ok){netFail(T.netLibFail);return;}
+  }
   netCleanup();
   net.role='host';net.mySide=0;net.creating=true;
   netBusy(T.netCreating);
   const code=genCode(5);
   net.code=code;
   try{
-    netWire(window.trystero.joinRoom({appId:'fieldchess-x1'},code));
+    netWire(window.trystero.joinRoom({appId:'fieldchess-x1',relays:NET_RELAYS},code));
   }catch(e){netFail(peerErrText(e));return;}
   renderNetModal();
   setNetStat('netRoomStat',T.netWaitHost,true);
@@ -831,17 +867,21 @@ function netCreate(){
     }
   },25000);
 }
-function netJoin(raw){
-  if(!ensureNetLib())return;
+async function netJoin(raw){
   if(!navigator.onLine){netFail(T.netOffline);return;}
   const code=(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(code.length<4){netFail(T.netNeedCode);return;}
+  if(!libReady()){
+    netBusy(T.netLibLoading);
+    const ok=await loadNetLib();
+    if(!ok){netFail(T.netLibFail);return;}
+  }
   netCleanup();
   net.role='guest';net.mySide=1;net.joining=true;
   netBusy(T.netJoining(code));
   net.code=code;
   try{
-    netWire(window.trystero.joinRoom({appId:'fieldchess-x1'},code));
+    netWire(window.trystero.joinRoom({appId:'fieldchess-x1',relays:NET_RELAYS},code));
   }catch(e){netFail(peerErrText(e));return;}
   net.to=setTimeout(()=>{
     if(net.connected)return;
@@ -849,12 +889,6 @@ function netJoin(raw){
   },15000);
 }
 function renderNetModal(){
-  if(!(window.trystero&&window.trystero.joinRoom)){
-    $('netSetup').style.display='block';
-    $('netRoom').style.display='none';
-    netFail(T.netLibFail);
-    return;
-  }
   const inRoom=!!(net.room&&(net.code||net.connected));
   $('netSetup').style.display=inRoom?'none':'block';
   $('netRoom').style.display=inRoom?'block':'none';
@@ -1483,7 +1517,7 @@ function fallbackCopy(txt,okMsg){
   netSend({t:'newrej'});
   toast(T.rejectedByYou);
 });
- $('btnCreate').addEventListener('click',netCreate);
+ $('btnCreate').addEventListener('click',()=>netCreate());
  $('btnJoin').addEventListener('click',()=>netJoin($('netCode').value));
  $('netCode').addEventListener('keydown',e=>{if(e.key==='Enter')netJoin($('netCode').value);});
  $('netCode').addEventListener('input',e=>{
@@ -1542,6 +1576,7 @@ document.addEventListener('keydown',e=>{
 /* ═══ Запуск ═════════════════════════════ */
 applyLang();
 newGame();
+loadNetLib();   /* тихо предзагружаем библиотеку связи, к моменту клика она уже будет готова */
 </script>
 </body>
 </html>
