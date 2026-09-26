@@ -8,8 +8,8 @@
 <title>Field Chess — шахматная дуэль на выставление</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prata&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script>if(!window.Peer){document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');}</script>
+<script src="https://cdn.jsdelivr.net/npm/trystero@0.21/dist/trystero-nostr.min.js"></script>
+<script>if(!window.trystero){document.write('<script src="https://unpkg.com/trystero@0.21/dist/trystero-nostr.min.js"><\/script>');}</script>
 <style>
 :root{
   color-scheme:only light;
@@ -453,19 +453,20 @@ ru:{
   netSent:'Предложение новой партии отправлено',
   netReady:(code)=>'Комната готова · код '+code,
   netWaitHost:'ждём соперника — передайте код другу',
+  netWaitSlow:'релеи связи долго не отвечают — проверьте сеть или VPN и попробуйте снова',
   netConnected:(name)=>'соединено · вы играете за '+name,
   netCreating:'создаём комнату…',
   netJoining:(code)=>'подключаемся к комнате '+code+'…',
   netSrvFail:'Сервис связи не отвечает. Проверьте интернет (иногда помогает VPN) и попробуйте снова.',
   netJoinFail:'Не удалось подключиться: комната не найдена или сервис связи недоступен. Проверьте код и попробуйте снова.',
   netNoRoom:'Комната не найдена — проверьте код',
+  netRoomBusy:'Комната уже занята — создайте новую',
   netOffline:'Нет доступа к интернету',
   netNeedCode:'Введите код комнаты — 4–5 символов',
   netLibFail:'Библиотека связи не загрузилась (нет интернета или её режет блокировщик). Обновите страницу или откройте по https-ссылке.',
   netSrvShort:'Сервис связи недоступен — проверьте интернет или попробуйте позже',
   netWebRTC:'Не удалось установить прямое соединение',
   netIncompat:'Браузер не поддерживает WebRTC',
-  netCodeBusy:'Код занят — пробуем другой',
   netErrPrefix:(t)=>'Ошибка связи'+(t?' ('+t+')':''),
   copyOk:(code)=>'Код скопирован: '+code,
   copyFail:'Не удалось скопировать',
@@ -550,19 +551,20 @@ en:{
   netSent:'New-game request sent',
   netReady:(code)=>'Room ready · code '+code,
   netWaitHost:'waiting for the opponent — share the code',
+  netWaitSlow:'relays are slow to respond — check your network or VPN and try again',
   netConnected:(name)=>'connected · you play '+name,
   netCreating:'creating a room…',
   netJoining:(code)=>'joining room '+code+'…',
   netSrvFail:'Relay service is not responding. Check your internet (a VPN sometimes helps) and try again.',
   netJoinFail:'Could not connect: room not found or relay unavailable. Check the code and try again.',
   netNoRoom:'Room not found — check the code',
+  netRoomBusy:'Room is already occupied — create a new one',
   netOffline:'No internet access',
   netNeedCode:'Enter the room code — 4–5 characters',
   netLibFail:'The relay library failed to load (no internet or a blocker). Refresh the page or open via an https link.',
   netSrvShort:'Relay service unavailable — check your internet or try later',
   netWebRTC:'Could not establish a direct connection',
   netIncompat:'Browser does not support WebRTC',
-  netCodeBusy:'Code taken — trying another',
   netErrPrefix:(t)=>'Connection error'+(t?' ('+t+')':''),
   copyOk:(code)=>'Code copied: '+code,
   copyFail:'Could not copy',
@@ -647,21 +649,17 @@ let counts, totals, mode='pvp', starter=0;
 let hoverIdx=-1, previewIdx=-1;
 const canHover=window.matchMedia&&matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-/* ═══ Сеть ═══════════════════════════════ */
-const net={peer:null,conn:null,role:'host',mySide:0,code:'',connected:false,tries:0,
-           creating:false,joining:false,to:null};
+/* ═══ Сеть: Trystero через Nostr-релеи ═══ */
+const net={room:null,send:null,unsubs:[],role:'host',mySide:0,code:'',connected:false,
+           creating:false,joining:false,to:null,hintTo:null,cfgTo:null,peerId:null,gotCfg:false};
 let pendingReq=false, lastSeen=0, pingTimer=null;
 const AZ='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function genCode(n){let s='';for(let i=0;i<n;i++)s+=AZ[Math.floor(Math.random()*AZ.length)];return s;}
 function peerErrText(e){
-  const t=e&&e.type?e.type:'';
-  if(t==='browser-incompatible')return T.netIncompat;
-  if(t==='network'||t==='server-error'||t==='socket-error')return T.netSrvShort;
-  if(t==='webrtc')return T.netWebRTC;
-  if(t==='unavailable-id')return T.netCodeBusy;
-  return T.netErrPrefix(t);
+  const m=(e&&(e.message||e.type))?String(e.message||e.type):'';
+  return T.netErrPrefix(m);
 }
-function netSend(o){try{if(net.conn&&net.conn.open)net.conn.send(o);}catch(e){}}
+function netSend(o){try{if(net.send&&net.connected)net.send(o);}catch(e){}}
 function netErr(m){const el=$('netErr');if(el)el.textContent=m||'';}
 function netStat(id,m,busy){const el=$(id);if(el){el.textContent=m;el.classList.toggle('busy',!!busy);}}
 function netBusy(msg){
@@ -680,11 +678,13 @@ function netIdle(){
 function netFail(msg){
   net.creating=false;net.joining=false;
   if(net.to){clearTimeout(net.to);net.to=null;}
+  if(net.hintTo){clearTimeout(net.hintTo);net.hintTo=null;}
+  if(net.cfgTo){clearTimeout(net.cfgTo);net.cfgTo=null;}
   netIdle();
   netErr(msg);
 }
-function ensurePeerLib(){
-  if(window.Peer)return true;
+function ensureNetLib(){
+  if(window.trystero&&window.trystero.joinRoom)return true;
   netFail(T.netLibFail);
   return false;
 }
@@ -700,41 +700,68 @@ function startPing(){
 function netCleanup(){
   stopPing();
   if(net.to){clearTimeout(net.to);net.to=null;}
-  if(net.conn){try{net.conn.close();}catch(e){}}
-  if(net.peer){try{net.peer.destroy();}catch(e){}}
-  net.conn=null;net.peer=null;net.connected=false;net.code='';
-  net.tries=0;net.creating=false;net.joining=false;pendingReq=false;
+  if(net.hintTo){clearTimeout(net.hintTo);net.hintTo=null;}
+  if(net.cfgTo){clearTimeout(net.cfgTo);net.cfgTo=null;}
+  net.unsubs.forEach(u=>{try{u();}catch(e){}});
+  net.unsubs=[];
+  if(net.room){try{net.room.leave();}catch(e){}}
+  net.room=null;net.send=null;net.peerId=null;net.connected=false;net.code='';
+  net.creating=false;net.joining=false;net.gotCfg=false;pendingReq=false;
 }
 function netLost(msg){
-  if(!net.peer&&!net.conn)return;
+  if(!net.room)return;
   netCleanup();
   netIdle();
   toast(msg);
   render();
   if($('netVeil').classList.contains('on'))renderNetModal();
 }
-function netWire(c){
-  c.on('open',()=>{
+function netWire(room){
+  net.room=room;
+  const[send,getMsg]=room.makeAction('msg');
+  net.send=send;
+  net.unsubs.push(room.onPeerJoin(pid=>{
+    if(net.connected&&net.peerId&&pid!==net.peerId){
+      try{send({t:'busy'},pid);}catch(e){}
+      return;
+    }
+    net.peerId=pid;
     if(net.to){clearTimeout(net.to);net.to=null;}
+    if(net.hintTo){clearTimeout(net.hintTo);net.hintTo=null;}
     net.connected=true;net.creating=false;net.joining=false;
     lastSeen=Date.now();
     netIdle();
     $('netVeil').classList.remove('on');
-    if(net.role==='host')netSend({t:'cfg',pair:pairIdx});
-    toast(net.role==='host'?T.netOppJoined(NAMES[0]):T.netJoinedGuest);
+    if(net.role==='host'){
+      netSend({t:'cfg',pair:pairIdx});
+      toast(T.netOppJoined(NAMES[0]));
+    }else{
+      toast(T.netJoinedGuest);
+      net.cfgTo=setTimeout(()=>{if(!net.gotCfg)netFail(T.netNoRoom);},8000);
+    }
     netReset(0);
     startPing();
+  }));
+  net.unsubs.push(room.onPeerLeave(pid=>{
+    if(net.peerId===pid)netLost(T.netOppLeft);
+  }));
+  getMsg((d,pid)=>{
+    if(!d||typeof d!=='object')return;
+    if(net.peerId&&pid!==net.peerId&&d.t!=='busy')return;
+    netOnData(d);
   });
-  c.on('data',netOnData);
-  c.on('close',()=>{if(net.conn===c)netLost(T.netOppLeft);});
-  c.on('error',()=>{});
 }
 function netOnData(d){
-  if(!d||typeof d!=='object')return;
   lastSeen=Date.now();
   if(d.t==='p'){netSend({t:'q'});return;}
   if(d.t==='q')return;
-  if(d.t==='cfg'){applyPair(d.pair|0,false);return;}
+  if(d.t==='cfg'){
+    if(net.cfgTo){clearTimeout(net.cfgTo);net.cfgTo=null;}
+    net.gotCfg=true;
+    applyPair(d.pair|0,false);
+    return;
+  }
+  if(d.t==='busy'){netFail(T.netRoomBusy);return;}
   if(d.t==='mv'){
     const mover=1-net.mySide;
     if(!net.connected||over||current!==mover){desync();return;}
@@ -784,91 +811,51 @@ function proposeNew(){
   toast(T.netSent);
 }
 function netCreate(){
-  if(!ensurePeerLib())return;
+  if(!ensureNetLib())return;
   if(!navigator.onLine){netFail(T.netOffline);return;}
   netCleanup();
   net.role='host';net.mySide=0;net.creating=true;
   netBusy(T.netCreating);
-  createPeer();
-  function createPeer(){
-    net.tries++;
-    const code=genCode(5);
-    let opened=false;
-    netBusy(T.netCreating);
-    const p=new Peer('fieldchess-x1-'+code,{debug:0});
-    net.peer=p;
-    if(net.to)clearTimeout(net.to);
-    net.to=setTimeout(()=>{
-      if(opened||net.connected)return;
-      try{p.destroy();}catch(e){}
-      if(net.tries<3)createPeer();
-      else netFail(T.netSrvFail);
-    },12000);
-    p.on('open',()=>{
-      opened=true;
-      if(net.to){clearTimeout(net.to);net.to=null;}
-      net.creating=false;
-      net.code=code;
-      renderNetModal();
-      setNetStat('netRoomStat',T.netWaitHost,true);
-      toast(T.netReady(code));
-    });
-    p.on('connection',c=>{
-      if(net.conn&&net.conn!==c){try{net.conn.close();}catch(e){}}
-      net.conn=c;netWire(c);
-    });
-    p.on('disconnected',()=>{try{if(!p.destroyed)p.reconnect();}catch(e){}});
-    p.on('error',e=>{
-      if(e&&e.type==='unavailable-id'){
-        if(net.tries<4){try{p.destroy();}catch(x){}createPeer();}
-        return;
-      }
-      if(!opened){
-        if(net.to){clearTimeout(net.to);net.to=null;}
-        try{p.destroy();}catch(x){}
-        netFail(peerErrText(e));
-      }else{
-        setNetStat('netRoomStat',peerErrText(e),false);
-      }
-    });
-  }
+  const code=genCode(5);
+  net.code=code;
+  try{
+    netWire(window.trystero.joinRoom({appId:'fieldchess-x1'},code));
+  }catch(e){netFail(peerErrText(e));return;}
+  renderNetModal();
+  setNetStat('netRoomStat',T.netWaitHost,true);
+  toast(T.netReady(code));
+  net.hintTo=setTimeout(()=>{
+    if(!net.connected){
+      setNetStat('netRoomStat',T.netWaitSlow,false);
+      toast(T.netWaitSlow);
+    }
+  },25000);
 }
 function netJoin(raw){
-  if(!ensurePeerLib())return;
+  if(!ensureNetLib())return;
   if(!navigator.onLine){netFail(T.netOffline);return;}
   const code=(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(code.length<4){netFail(T.netNeedCode);return;}
   netCleanup();
   net.role='guest';net.mySide=1;net.joining=true;
   netBusy(T.netJoining(code));
-  const p=new Peer({debug:0});
-  net.peer=p;
-  if(net.to)clearTimeout(net.to);
+  net.code=code;
+  try{
+    netWire(window.trystero.joinRoom({appId:'fieldchess-x1'},code));
+  }catch(e){netFail(peerErrText(e));return;}
   net.to=setTimeout(()=>{
     if(net.connected)return;
-    try{p.destroy();}catch(e){}
     netFail(T.netJoinFail);
   },15000);
-  p.on('open',()=>{
-    const c=p.connect('fieldchess-x1-'+code,{reliable:true});
-    net.conn=c;netWire(c);
-  });
-  p.on('disconnected',()=>{if(!net.connected){try{p.reconnect();}catch(e){}}});
-  p.on('error',e=>{
-    if(net.connected)return;
-    if(net.to){clearTimeout(net.to);net.to=null;}
-    try{p.destroy();}catch(x){}
-    netFail(e&&e.type==='peer-unavailable'?T.netNoRoom:peerErrText(e));
-  });
 }
 function renderNetModal(){
-  if(!window.Peer){
+  if(!(window.trystero&&window.trystero.joinRoom)){
     $('netSetup').style.display='block';
     $('netRoom').style.display='none';
     netFail(T.netLibFail);
     return;
   }
-  const inRoom=!!(net.peer&&(net.code||net.connected));
+  const inRoom=!!(net.room&&(net.code||net.connected));
   $('netSetup').style.display=inRoom?'none':'block';
   $('netRoom').style.display=inRoom?'block':'none';
   if(inRoom){
@@ -1532,7 +1519,7 @@ function setMode(m){
     renderLog();
     openNetModal();
   }else{
-    if(net.peer||net.conn)netCleanup();
+    if(net.room)netCleanup();
     newGame();
   }
 }
