@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="color-scheme" content="only light"/>
+<meta name="theme-color" content="#F2EBDA"/>
+<title>Field Chess — шахматная дуэль на выставление</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prata&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>if(!window.Peer){document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');}</script>
+<style>
+:root{
+  color-scheme:only light;
+  --paper:#F2EBDA; --paper2:#EAE0C8; --ink:#241E13; --ink-soft:#6B604C;
+  --red:#6E1A17; --teal:#557E5B;
+  --pcol0:#6E1A17; --pcol1:#557E5B;
+  --cell-l:#EDE3C6; --cell-d:#D2C298;
+  --shadow:8px 8px 0 rgba(36,30,19,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:'IBM Plex Sans',sans-serif; font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  transition:background .25s,color .25s;
+}
+body::before{
+  content:''; position:fixed; inset:0; z-index:300; pointer-events:none; mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+#errbox{display:none;position:fixed;left:0;right:0;top:0;z-index:900;background:#8F2B12;color:#F2EBDA;
+  font-family:'IBM Plex Mono',monospace;font-size:12px;padding:10px 14px;white-space:pre-wrap}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 26px 40px}
+
+.topbar{display:flex;justify-content:space-between;align-items:baseline;gap:4px 16px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
+  border-bottom:1px solid rgba(128,120,100,.35);padding-bottom:8px}
+.topbar span{white-space:nowrap}
+@media (max-width:640px){
+  .topbar{flex-direction:column;align-items:flex-start;gap:3px}
+}
+header.masthead{display:flex;justify-content:space-between;align-items:center;gap:20px;
+  padding:20px 0 16px;border-bottom:2px solid var(--ink);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:16px}
+.logo{width:54px;height:54px;border:2.5px solid var(--ink);display:grid;place-items:center;flex:none;background:var(--paper2)}
+.logo svg{width:40px;height:40px;color:var(--ink)}
+h1{font-family:'Prata',serif;font-weight:400;font-size:clamp(30px,4.6vw,46px);letter-spacing:.05em;text-transform:uppercase;line-height:1}
+.hcontrols{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.seg{display:flex;border:2px solid var(--ink);background:var(--paper2)}
+.seg button{font:inherit;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:8px 14px;
+  background:transparent;border:0;color:var(--ink);cursor:pointer;font-weight:600}
+.seg button.on{background:var(--ink);color:var(--paper)}
+.pairs{display:flex;gap:8px;flex-wrap:wrap}
+.pchip{display:flex;align-items:center;gap:8px;padding:8px 13px;border:2px solid var(--ink);background:var(--paper2);
+  cursor:pointer;font:inherit;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);
+  transition:background .15s,color .15s}
+.pchip .pdots{display:flex;flex:none;align-items:center}
+.pchip .pdots i{width:14px;height:14px;border-radius:50%;display:block}
+.pchip .pdots i+i{margin-left:-6px}
+.pchip:hover:not(:disabled):not(.on){background:var(--paper)}
+.pchip.on{background:var(--ink);color:var(--paper)}
+.pchip:disabled{opacity:.35;cursor:default}
+.btn{font:inherit;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;
+  padding:9px 16px;border:2px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;transition:background .15s,color .15s}
+.btn:hover:not(:disabled){background:var(--ink);color:var(--paper)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn.wide{width:100%}
+
+main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:30px;margin-top:26px;align-items:start}
+
+.board-area{display:flex;flex-direction:column;align-items:center}
+.board-frame{display:grid;grid-template-columns:20px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 18px;gap:4px;width:100%;max-width:624px}
+.ranks{grid-column:1;grid-row:1;display:flex;flex-direction:column;padding:2.5px 0}
+.files{grid-column:2;grid-row:2;display:flex;padding:0 2.5px}
+.ranks span,.files span{flex:1;display:grid;place-items:center;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft)}
+.board{grid-column:2;grid-row:1;position:relative;width:100%;
+  aspect-ratio:1;border:2.5px solid var(--ink);box-shadow:var(--shadow);background:var(--cell-l);
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);user-select:none}
+.cell{position:relative;background:var(--cell-l);transition:background .25s}
+.cell.dk{background:var(--cell-d)}
+.cell::before{content:'';position:absolute;inset:0;box-shadow:inset 0 0 0 .5px rgba(36,30,19,.25);pointer-events:none}
+.cell .pc{position:absolute;inset:0}
+.piece{position:absolute;inset:9%;filter:drop-shadow(0 2px 1px rgba(0,0,0,.28))}
+.piece.p0{color:var(--pcol0,var(--red))} .piece.p1{color:var(--pcol1,var(--teal))}
+.piece.lite,.ghostp.lite{stroke:var(--ink);stroke-width:3.5px;paint-order:stroke fill}
+.piece.dkst,.ghostp.dkst{stroke:var(--paper);stroke-width:4px;paint-order:stroke fill}
+.piece.just{animation:drop .5s cubic-bezier(.18,1.5,.35,1) both}
+@keyframes drop{0%{transform:translateY(-42%) scale(.4);opacity:0}100%{transform:none;opacity:1}}
+.ghostp{position:absolute;inset:9%;opacity:.3;pointer-events:none}
+.ripple{position:absolute;left:50%;top:50%;width:22%;aspect-ratio:1;transform:translate(-50%,-50%);
+  border:2.5px solid var(--pc,var(--ink));border-radius:50%;pointer-events:none;animation:rip .6s ease-out forwards}
+@keyframes rip{from{opacity:.9}to{width:190%;opacity:0}}
+.dot{position:absolute;left:50%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;transform:rotate(45deg);opacity:0;pointer-events:none}
+.cell.valid .dot{animation:dotIn .4s var(--d,0s) both, dotPulse 1.7s calc(var(--d,0s) + .4s) infinite}
+@keyframes dotIn{from{opacity:0;transform:rotate(45deg) scale(0)}to{opacity:1;transform:rotate(45deg) scale(.85)}}
+@keyframes dotPulse{0%,100%{opacity:.5;transform:rotate(45deg) scale(.72)}50%{opacity:.95;transform:rotate(45deg) scale(1)}}
+.cell.valid{cursor:pointer}
+.cell.valid:hover{outline:2px solid var(--pc,var(--ink));outline-offset:-2px}
+.cell.prevy{outline:2px dashed var(--pc,var(--ink));outline-offset:-2px}
+.cell.last{outline:2.5px solid var(--pc,var(--ink));outline-offset:-4px}
+.cell.shake{animation:shake .22s}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+#olay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}
+.caption{font-size:12.5px;color:var(--ink-soft);margin-top:14px;max-width:600px;width:100%;min-height:44px}
+.caption b{color:var(--ink)}
+
+.panel{display:flex;flex-direction:column;gap:16px}
+.card{border:2px solid var(--ink);background:var(--paper2);box-shadow:var(--shadow);padding:14px 16px}
+.score{display:flex;justify-content:space-around;align-items:stretch;gap:8px}
+.side{text-align:center;position:relative;padding-top:14px;flex:1}
+.side .num{font-family:'Prata',serif;font-size:46px;line-height:1}
+.side .nm{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-top:4px}
+.side.s0 .num{color:var(--red)} .side.s1 .num{color:var(--teal)}
+.side .turnmark{position:absolute;top:0;left:50%;transform:translateX(-50%) rotate(45deg);width:9px;height:9px;background:transparent;transition:background .2s}
+.side.act .turnmark{background:var(--ink);animation:markp 1.4s infinite}
+@keyframes markp{0%,100%{opacity:.45}50%{opacity:1}}
+.colon{font-family:'Prata',serif;font-size:34px;align-self:center;color:var(--ink-soft)}
+.turn{border:2px solid var(--ink);background:var(--paper2);
+  box-shadow:var(--shadow);padding:11px 14px}
+.turn .t1{font-weight:600;font-size:15px}
+.turn .t2{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-top:2px}
+.turn .think{animation:blink 1.1s infinite}
+@keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+.arsenal{display:flex;flex-direction:column}
+.arow{display:flex;align-items:center;gap:12px;padding:9px 10px;border:2px solid transparent;cursor:pointer;transition:background .15s,border-color .15s}
+.arow+.arow{border-top:1px solid rgba(128,120,100,.3)}
+.arow kbd{font-family:'IBM Plex Mono',monospace;font-size:10px;border:1px solid var(--ink-soft);color:var(--ink-soft);
+  padding:1px 5px;border-radius:2px}
+.arow .afi{width:30px;height:30px;flex:none;color:var(--pc,var(--ink))}
+.arow .afi svg{width:100%;height:100%}
+.arow .anm{flex:1;font-weight:600;font-size:14px}
+.arow .arem{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft)}
+.arow.on{background:var(--pc,var(--ink));border-color:var(--ink)}
+.arow.on .anm,.arow.on kbd{color:var(--paper)}
+.arow.on kbd{border-color:rgba(200,190,160,.6)}
+.arow.on .afi{color:var(--paper)}
+.arow.on .arem{color:rgba(200,190,160,.85)}
+.arow.off{opacity:.32;cursor:default}
+.arow.off .anm{text-decoration:line-through}
+.actions{display:flex;gap:10px}
+.actions .btn{flex:1;text-align:center}
+.log{max-height:200px;overflow-y:auto;scrollbar-width:thin}
+.log .li{display:flex;align-items:baseline;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:4px 2px;border-bottom:1px dashed rgba(128,120,100,.35)}
+.log .n{color:var(--ink-soft);width:22px;flex:none}
+.log .pip{width:9px;height:9px;border-radius:50%;flex:none;align-self:center;box-shadow:0 0 0 1px rgba(140,130,105,.55)}
+.log .who{font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;flex:1}
+.log .mv{color:var(--ink-soft)}
+.log .empty{font-size:12px;color:var(--ink-soft);font-style:italic}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,16px);background:var(--ink);color:var(--paper);
+  padding:10px 18px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:400;max-width:88vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+.veil{position:fixed;inset:0;background:rgba(20,16,8,.55);backdrop-filter:blur(2px);z-index:500;
+  display:grid;place-items:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .25s}
+.veil.on{opacity:1;pointer-events:auto}
+.modal{background:var(--paper);border:2.5px solid var(--ink);box-shadow:10px 10px 0 rgba(0,0,0,.25);
+  max-width:540px;width:100%;padding:26px 28px;transform:translateY(10px);transition:transform .25s;max-height:90vh;overflow-y:auto}
+.veil.on .modal{transform:none}
+.modal h2{font-family:'Prata',serif;font-weight:400;font-size:26px;margin-bottom:14px;letter-spacing:.03em}
+.modal ol{margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
+.modal .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal .mrow.center{justify-content:center}
+.fin-card{text-align:center;position:relative}
+.fin-kicker{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+.fin-score{font-family:'Prata',serif;font-size:clamp(56px,10vw,92px);line-height:1.1;margin:10px 0 4px}
+.fin-score .fs0{color:var(--red)} .fin-score .fs1{color:var(--teal)}
+.fin-score i{font-style:normal;color:var(--ink-soft);padding:0 10px;font-size:.6em;vertical-align:middle}
+.stamp{display:inline-block;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:clamp(16px,3vw,24px);
+  letter-spacing:.18em;text-transform:uppercase;border:3.5px solid var(--sc,var(--ink));color:var(--sc,var(--ink));
+  padding:8px 22px;transform:rotate(-5deg);margin:12px 0 8px;animation:stampIn .45s cubic-bezier(.2,1.6,.4,1) both .15s}
+@keyframes stampIn{from{transform:rotate(-14deg) scale(1.9);opacity:0}to{transform:rotate(-5deg) scale(1);opacity:1}}
+.fin-sub{font-size:13px;color:var(--ink-soft);margin-bottom:6px}
+
+.netp{font-size:14px;margin-bottom:14px}
+.nethint{font-size:12.5px;color:var(--ink-soft);margin-top:14px}
+.ordiv{display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--ink-soft);
+  font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.14em}
+.ordiv::before,.ordiv::after{content:'';flex:1;border-top:1px dashed rgba(128,120,100,.4)}
+.joinrow{display:flex;gap:10px}
+.ncode{flex:1;min-width:0;font-family:'IBM Plex Mono',monospace;font-size:22px;letter-spacing:.35em;text-align:center;
+  text-transform:uppercase;border:2px solid var(--ink);background:var(--paper2);color:var(--ink);padding:8px 4px 8px 12px;outline:none}
+.ncode:focus{background:var(--paper)}
+.neterr{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#E06B50;margin-top:12px;min-height:18px}
+.netlab{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);text-align:center}
+.codebig{font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:clamp(30px,8vw,42px);letter-spacing:.3em;
+  text-align:center;border:2.5px solid var(--ink);background:var(--paper2);box-shadow:var(--shadow);
+  padding:14px 10px 14px 22px;margin:10px 0 12px;user-select:all}
+.netstat{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft);text-align:center;min-height:20px}
+.netstat.busy{color:var(--ink);font-weight:600}
+.netstat.busy::after{content:' ···';animation:blink 1.1s infinite}
+
+@media (max-width:980px){
+  main{grid-template-columns:1fr}
+  .wrap{padding:14px 14px 34px}
+}
+</style>
+</head>
+
+<body>
+
+<div id="errbox"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="pc-Q" viewBox="0 0 100 100">
+    <circle cx="26" cy="17" r="5" fill="currentColor"/><circle cx="50" cy="10" r="5.5" fill="currentColor"/><circle cx="74" cy="17" r="5" fill="currentColor"/>
+    <polygon points="26,24 40,40 50,18 60,40 74,24 64,47 71,74 29,74 36,47" fill="currentColor"/>
+    <rect x="24" y="78" width="52" height="8" fill="currentColor"/>
+  </symbol>
+  <symbol id="pc-R" viewBox="0 0 100 100">
+    <path d="M26 18 H37 V28 H45 V18 H55 V28 H63 V18 H74 V42 H68 V70 H76 V84 H24 V70 H32 V42 H26 Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="pc-B" viewBox="0 0 100 100">
+    <circle cx="50" cy="13" r="6" fill="currentColor"/>
+    <path d="M50 22 C60 30 68 42 68 54 C68 66 60 73 50 73 C40 73 32 66 32 54 C32 42 40 30 50 22 Z M53 36 L64 47 L58 53 L47 42 Z" fill="currentColor" fill-rule="evenodd"/>
+    <path d="M40 74 H60 V79 H40 Z M28 81 H72 V88 H28 Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="pc-N" viewBox="0 0 100 100">
+    <path d="M32 84 C32 72 35 62 30 54 C25 45 30 33 41 27 L45 14 L54 25 C69 29 76 43 76 57 C76 62 71 65 66 62 C60 58 56 55 51 55 C46 55 46 60 50 64 C57 71 62 76 62 84 Z M47.5 36 a3.2 3.2 0 1 0 .1 0 Z" fill="currentColor" fill-rule="evenodd"/>
+    <path d="M27 85 H67 V91 H27 Z" fill="currentColor"/>
+  </symbol>
+</defs></svg>
+
+<div class="wrap">
+  <div class="topbar">
+    <span id="topLeft">Field Chess · дуэль выставления</span>
+    <span id="topRight">ход 1 · фигур: 0</span>
+  </div>
+
+  <header class="masthead">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 100 100"><use href="#pc-N"/></svg></div>
+      <div><h1 id="h1">Field Chess</h1></div>
+    </div>
+    <div class="hcontrols">
+      <div class="seg" id="modeSeg">
+        <button data-mode="pvp" class="on">Вдвоём</button>
+        <button data-mode="ai">С компьютером</button>
+        <button data-mode="net">По сети</button>
+      </div>
+      <div class="seg" id="langSeg">
+        <button data-lang="ru" class="on">RU</button>
+        <button data-lang="en">EN</button>
+      </div>
+      <div class="pairs" id="pairs"></div>
+      <button class="btn" id="btnRules">Правила</button>
+      <button class="btn" id="btnNew">Новая партия</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="board-area">
+      <div class="board-frame">
+        <div class="ranks" id="ranks"></div>
+        <div class="board" id="board">
+          <svg id="olay" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="files" id="files"></div>
+      </div>
+      <p class="caption" id="caption"></p>
+    </section>
+
+    <aside class="panel">
+      <div class="card score">
+        <div class="side s0" id="side0"><span class="turnmark"></span><div class="num" id="fs0">0</div><div class="nm" id="nm0"></div></div>
+        <div class="colon">:</div>
+        <div class="side s1" id="side1"><span class="turnmark"></span><div class="num" id="fs1">0</div><div class="nm" id="nm1"></div></div>
+      </div>
+
+      <div class="turn" id="turn">
+        <div class="t1" id="turnT1">—</div>
+        <div class="t2" id="turnT2">—</div>
+      </div>
+
+      <div class="card arsenal" id="arsenal"></div>
+
+      <div class="actions">
+        <button class="btn" id="btnUndo">Отменить ход</button>
+        <button class="btn" id="btnEnd">Завершить</button>
+      </div>
+
+      <div class="card"><div class="log" id="log"></div></div>
+    </aside>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<div class="veil" id="rulesVeil">
+  <div class="modal">
+    <h2 id="rulesTitle">Как играть</h2>
+    <ol id="rulesList"></ol>
+    <p id="rulesNet" style="font-size:13px;color:var(--ink-soft);margin-top:14px"></p>
+    <div class="mrow"><button class="btn" id="btnRulesClose">Понятно</button></div>
+  </div>
+</div>
+
+<div class="veil" id="netVeil">
+  <div class="modal">
+    <h2 id="netTitle">Игра по сети</h2>
+
+    <div id="netSetup">
+      <p class="netp" id="netP"></p>
+      <button class="btn wide" id="btnCreate">Создать комнату</button>
+      <div class="ordiv"><span id="orSpan">или</span></div>
+      <div class="joinrow">
+        <input id="netCode" class="ncode" maxlength="5" placeholder="КОД" autocomplete="off" spellcheck="false">
+        <button class="btn" id="btnJoin">Подключиться</button>
+      </div>
+      <div class="netstat" id="netSetupStat"></div>
+      <div class="neterr" id="netErr"></div>
+      <p class="nethint" id="netHint"></p>
+    </div>
+
+    <div id="netRoom" style="display:none">
+      <div class="netlab" id="netLab">код комнаты</div>
+      <div class="codebig" id="netCodeBig">—</div>
+      <div class="netstat" id="netRoomStat">—</div>
+      <div class="mrow center">
+        <button class="btn" id="btnCopyCode">Скопировать код</button>
+        <button class="btn" id="btnNetLeave">Отключиться</button>
+      </div>
+    </div>
+
+    <div class="mrow"><button class="btn" id="btnNetClose">Закрыть</button></div>
+  </div>
+</div>
+
+<div class="veil" id="reqVeil">
+  <div class="modal">
+    <h2 id="reqTitle">Новая партия?</h2>
+    <p id="reqText" style="font-size:14px"></p>
+    <div class="mrow">
+      <button class="btn" id="reqNo">Отклонить</button>
+      <button class="btn" id="reqYes" style="background:var(--ink);color:var(--paper)">Принять</button>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="endVeil">
+  <div class="modal">
+    <h2 id="endTitle">Завершить партию?</h2>
+    <p id="endP" style="font-size:14px"></p>
+    <div class="mrow">
+      <button class="btn" id="btnEndNo">Играть дальше</button>
+      <button class="btn" id="btnEndYes" style="background:var(--ink);color:var(--paper)">Завершить</button>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="finVeil">
+  <div class="modal fin-card">
+    <div class="fin-kicker" id="finKicker">партия окончена</div>
+    <div class="fin-score"><span class="fs0" id="finS0">0</span><i>:</i><span class="fs1" id="finS1">0</span></div>
+    <div><span class="stamp" id="finStamp">—</span></div>
+    <p class="fin-sub" id="finSub"></p>
+    <div class="mrow" style="justify-content:center">
+      <button class="btn" id="btnLook">Осмотреть доску</button>
+      <button class="btn" id="btnRematch" style="background:var(--ink);color:var(--paper)">Реванш</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ── Красная строка диагностики ── */
+window.addEventListener('error',function(e){
+  var b=document.getElementById('errbox');
+  if(b){b.style.display='block';
+    b.textContent='Script error: '+e.message+' (line '+(e.lineno||'?')+')';}
+});
+window.addEventListener('unhandledrejection',function(e){
+  var b=document.getElementById('errbox');
+  var m=(e.reason&&e.reason.message)?e.reason.message:String(e.reason);
+  if(b){b.style.display='block';b.textContent='Promise error: '+m;}
+});
+
+/* ═══ Язык и строки ══════════════════════ */
+let lang='ru';
+try{const s=localStorage.getItem('garrisonLang');if(s==='ru'||s==='en')lang=s;}catch(e){}
+
+const STR={
+ru:{
+  title:'Field Chess — шахматная дуэль на выставление',
+  topLeft:'Field Chess · дуэль выставления',
+  h1:'Field Chess',
+  mode_pvp:'Вдвоём', mode_ai:'С компьютером', mode_net:'По сети',
+  rules:'Правила', newGame:'Новая партия',
+  undo:'Отменить ход', end:'Завершить',
+  rulesTitle:'Как играть',
+  rulesList:[
+    'Игроки по очереди ставят <b>по одной фигуре</b> на пустую клетку. Запас: <b>2 ферзя</b>, <b>3 ладьи</b>, кони и слоны — <b>без ограничений</b>. Пешек и королей нет.',
+    'Ставить можно на <b>любую пустую клетку</b>, где выполняются два условия: новая фигура <b>не бьёт ни одну чужую</b> фигуру <b>и сама не под боем</b> ни одной чужой.',
+    'Других ограничений нет. Расположение <b>своих</b> фигур не проверяется вовсе: стоять рядом с ними, бить их или держаться подальше — как хотите.',
+    'Бой считается по шахматным правилам: линии перекрываются стоящими фигурами, конь перепрыгивает.',
+    'Кто не может поставить ни одной фигуры — <b>пропускает ход</b>. Если не могут оба подряд — партия заканчивается: <b>побеждает тот, у кого фигур больше</b>.'
+  ],
+  rulesNet:'<b>По сети:</b> создатель комнаты играет за первую сторону и задаёт имена сторон; соединение прямое (P2P). Отмена хода в сетевой партии недоступна.',
+  ok:'Понятно',
+  netTitle:'Игра по сети',
+  netP:'Создайте комнату и передайте код сопернику любым способом — например, в мессенджере. Соединение прямое: ходы идут между вами, сервер нужен только чтобы найти друг друга.',
+  createRoom:'Создать комнату', or:'или', codePh:'КОД', join:'Подключиться',
+  netHint:'Если подключиться не удаётся: проверьте интернет; некоторые сети, VPN и блокировщики срезают WebRTC. Помогает открытие страницы по https-ссылке (например, GitHub Pages) или другой браузер.',
+  roomCode:'код комнаты', copyCode:'Скопировать код', disconnect:'Отключиться', close:'Закрыть',
+  reqTitle:'Новая партия?', reqText:'Соперник предлагает начать новую партию. Текущая будет сброшена.',
+  reject:'Отклонить', accept:'Принять',
+  endTitle:'Завершить партию?', endP:'Итог будет подсчитан по текущему количеству фигур на доске.',
+  keepPlaying:'Играть дальше', finish:'Завершить',
+  look:'Осмотреть доску', rematch:'Реванш',
+  occupied:'Клетка занята',
+  errAttacks:'Нельзя: эта фигура била бы чужую',
+  errAttacked:'Нельзя: фигура попала бы под удар',
+  capLocal:'Ставить можно на <b>любую пустую клетку</b>, где фигура <b>не бьёт чужих</b> и <b>не под боем чужих</b>. Расположение своих фигур не важно. Наведите или тапните на клетку — покажу, что ей мешает.',
+  capNetWait:'Сетевой режим: создайте комнату и отправьте код сопернику или введите его код.',
+  logPass:'нет ходов — пропуск', logEmptyHistory:'История пуста.',
+  descOccupied:(sq,mine,nom)=>`${sq}: здесь стоит ${mine?'свой':'чужой'} ${nom}`,
+  descAttacks:(nm,sq,fem,accE,extra)=>`Нельзя: ${nm} ${sq} ${fem?'била бы':'бил бы'} ${accE}${extra?` и ещё ${extra}`:''}`,
+  descAttacked:(nm,sq,gen,sq2,extra)=>`Нельзя: ${nm} ${sq} под боем ${gen} ${sq2}${extra?` и ещё ${extra}`:''}`,
+  descOk:(nm,sq)=>`<b>Можно:</b> ${nm} ${sq} — чужих не бьёт, под боем не стоит`,
+  passToast:(name)=>`${name} пропускает ход — нет безопасной клетки`,
+  passMine:'У вас нет ходов — пропуск',
+  notYourTurn:'Сейчас ход соперника',
+  tcOver:'Партия окончена', tcOverSub:(a,b)=>`итог: ${a} : ${b}`,
+  tcNetWait:'Ожидание соперника…', tcNetWaitSub:'создайте комнату или подключитесь по коду',
+  tcYour:(name)=>'Ваш ход — '+name,
+  tcFirst:'первый ход — свободный · ', tcPiece:(nm)=>'фигура: '+nm,
+  tcOpp:(name)=>'Ход соперника — '+name, tcWaiting:'ждём ход…',
+  tcAI:(name)=>name+' обдумывает ход', tcAIsub:'компьютер',
+  tcLocal:(n,name)=>`Ход №${n} — ${name}`, tcChosen:(nm)=>'выбрана фигура: '+nm,
+  trOver:'партия окончена', trNet:'онлайн', trNoLink:'нет связи',
+  trLocal:(n,m)=>`ход ${n} · фигур: ${m}`,
+  trNetCode:(c)=>'онлайн · '+c,
+  you:' · вы',
+  finEarly:'партия завершена досрочно', finNoMoves:'ходов больше нет',
+  stampWin:(name)=>'Победа · '+name, stampDraw:'Ничья',
+  finSubEarly:'счёт на момент остановки партии',
+  finSubFair:'за всю партию не было побито ни одной фигуры',
+  netOppJoined:(name)=>'Соперник подключился — вы играете за '+name,
+  netJoinedGuest:'Соединено — вы играете за вторую сторону',
+  netOppLeft:'Соперник отключился',
+  netOppLost:'Связь с соперником потеряна',
+  netDesync:'Рассинхрон: ход соперника не соответствует правилам — партия остановлена',
+  netBye:'Соперник перешёл в локальный режим',
+  netNewReq:(name)=>name+' предлагает новую партию. Текущая партия будет сброшена.',
+  netNewStart:(name)=>'Новая сетевая партия — первый ход за '+name,
+  netRejected:'Соперник отклонил новую партию',
+  netNoLink:'Нет связи с соперником',
+  netAlready:'Предложение уже отправлено — ждём ответа',
+  netSent:'Предложение новой партии отправлено',
+  netReady:(code)=>'Комната готова · код '+code,
+  netWaitHost:'ждём соперника — передайте код другу',
+  netConnected:(name)=>'соединено · вы играете за '+name,
+  netCreating:'создаём комнату…',
+  netJoining:(code)=>'подключаемся к комнате '+code+'…',
+  netSrvFail:'Сервис связи не отвечает. Проверьте интернет (иногда помогает VPN) и попробуйте снова.',
+  netJoinFail:'Не удалось подключиться: комната не найдена или сервис связи недоступен. Проверьте код и попробуйте снова.',
+  netNoRoom:'Комната не найдена — проверьте код',
+  netOffline:'Нет доступа к интернету',
+  netNeedCode:'Введите код комнаты — 4–5 символов',
+  netLibFail:'Библиотека связи не загрузилась (нет интернета или её режет блокировщик). Обновите страницу или откройте по https-ссылке.',
+  netSrvShort:'Сервис связи недоступен — проверьте интернет или попробуйте позже',
+  netWebRTC:'Не удалось установить прямое соединение',
+  netIncompat:'Браузер не поддерживает WebRTC',
+  netCodeBusy:'Код занят — пробуем другой',
+  netErrPrefix:(t)=>'Ошибка связи'+(t?' ('+t+')':''),
+  copyOk:(code)=>'Код скопирован: '+code,
+  copyFail:'Не удалось скопировать',
+  netLeftLocal:'Отключились — локальная партия вдвоём',
+  toastAI:'Новая партия: вы против компьютера',
+  toastPvp:'Новая партия: играем вдвоём',
+  rejectedByYou:'Вы отклонили предложение',
+  undoNetTitle:'В сетевой партии отмена недоступна',
+  pairNetTitle:'В сетевой партии имена задаёт создатель комнаты',
+  sidesToast:(a,b)=>'Стороны: '+a+' · '+b,
+  logEmptyStart:(name)=>'Партия ещё не начата — первый ход за '+name+'.',
+  logEmptyNet:(name,me)=>'Сетевая партия — первый ход за '+name+(me?' (это вы)':' (соперник)')+'.',
+  logEmptyWait:'Ожидание соперника — создайте комнату или введите код.',
+  langToast:'Язык: русский'
+},
+en:{
+  title:'Field Chess — a chess placement duel',
+  topLeft:'Field Chess · placement duel',
+  h1:'Field Chess',
+  mode_pvp:'Two players', mode_ai:'vs Computer', mode_net:'Online',
+  rules:'Rules', newGame:'New game',
+  undo:'Undo move', end:'Resign',
+  rulesTitle:'How to play',
+  rulesList:[
+    'Players take turns placing <b>one piece</b> on an empty square. Stock: <b>2 queens</b>, <b>3 rooks</b>, knights and bishops are <b>unlimited</b>. No pawns, no kings.',
+    'You may place on <b>any empty square</b> as long as two conditions hold: the new piece <b>attacks no enemy piece</b> and <b>is not attacked</b> by any enemy piece.',
+    'No other restrictions. The placement of <b>your own</b> pieces is not checked at all: stand next to them, "attack" them or keep away — up to you.',
+    'Attacks follow chess rules: sliding lines are blocked by pieces, knights jump.',
+    'A player with no legal placement <b>passes</b>. If both pass in a row, the game ends: <b>the side with more pieces wins</b>.'
+  ],
+  rulesNet:'<b>Online:</b> the room host plays the first side and picks the side names; the connection is direct (P2P). Undo is unavailable in online games.',
+  ok:'Got it',
+  netTitle:'Online game',
+  netP:'Create a room and share the code with your opponent any way you like — a messenger, for example. The connection is direct: moves go between you; the server only helps you find each other.',
+  createRoom:'Create a room', or:'or', codePh:'CODE', join:'Join',
+  netHint:'If joining fails: check your internet; some networks, VPNs and blockers strip WebRTC. Opening the page via an https link (like GitHub Pages) or a different browser helps.',
+  roomCode:'room code', copyCode:'Copy code', disconnect:'Disconnect', close:'Close',
+  reqTitle:'New game?', reqText:'Your opponent suggests starting a new game. The current one will be reset.',
+  reject:'Decline', accept:'Accept',
+  endTitle:'Resign the game?', endP:'The result will be counted from the pieces currently on the board.',
+  keepPlaying:'Keep playing', finish:'Resign',
+  look:'Inspect the board', rematch:'Rematch',
+  occupied:'Square is occupied',
+  errAttacks:'Not allowed: this piece would attack an enemy',
+  errAttacked:'Not allowed: the piece would be under attack',
+  capLocal:'You may place on <b>any empty square</b> where the piece <b>attacks no enemy</b> and <b>is not attacked</b>. Your own pieces do not matter. Hover or tap a square — I will show what blocks it.',
+  capNetWait:'Online mode: create a room and send the code to your opponent, or enter their code.',
+  logPass:'no moves — pass', logEmptyHistory:'History is empty.',
+  descOccupied:(sq,mine,nom)=>`${sq}: ${mine?'your':'an enemy'} ${nom} is here`,
+  descAttacks:(nm,sq,fem,accE,extra)=>`Not allowed: ${nm} ${sq} would attack ${accE}${extra?` and ${extra} more`:''}`,
+  descAttacked:(nm,sq,gen,sq2,extra)=>`Not allowed: ${nm} ${sq} would be under attack by the ${gen} ${sq2}${extra?` and ${extra} more`:''}`,
+  descOk:(nm,sq)=>`<b>OK:</b> ${nm} ${sq} — attacks no enemy, is not attacked`,
+  passToast:(name)=>`${name} has no moves — turn passed`,
+  passMine:'You have no moves — pass',
+  notYourTurn:"It's the opponent's turn",
+  tcOver:'Game over', tcOverSub:(a,b)=>`final: ${a} : ${b}`,
+  tcNetWait:'Waiting for opponent…', tcNetWaitSub:'create a room or join with a code',
+  tcYour:(name)=>'Your move — '+name,
+  tcFirst:'first move is free · ', tcPiece:(nm)=>'piece: '+nm,
+  tcOpp:(name)=>"Opponent's move — "+name, tcWaiting:'waiting…',
+  tcAI:(name)=>name+' is thinking', tcAIsub:'computer',
+  tcLocal:(n,name)=>`Move #${n} — ${name}`, tcChosen:(nm)=>'piece: '+nm,
+  trOver:'game over', trNet:'online', trNoLink:'offline',
+  trLocal:(n,m)=>`move ${n} · pieces: ${m}`,
+  trNetCode:(c)=>'online · '+c,
+  you:' · you',
+  finEarly:'game stopped early', finNoMoves:'no moves left',
+  stampWin:(name)=>'Victory · '+name, stampDraw:'Draw',
+  finSubEarly:'score at the moment the game was stopped',
+  finSubFair:'not a single piece was captured in the whole game',
+  netOppJoined:(name)=>'Opponent joined — you play '+name,
+  netJoinedGuest:'Connected — you play the second side',
+  netOppLeft:'Opponent disconnected',
+  netOppLost:'Connection with the opponent lost',
+  netDesync:'Desync: the opponent move broke the rules — game halted',
+  netBye:'Opponent switched to local mode',
+  netNewReq:(name)=>name+' suggests a new game. The current one will be reset.',
+  netNewStart:(name)=>'New online game — '+name+' moves first',
+  netRejected:'Opponent declined the new game',
+  netNoLink:'No link to the opponent',
+  netAlready:'Request already sent — waiting',
+  netSent:'New-game request sent',
+  netReady:(code)=>'Room ready · code '+code,
+  netWaitHost:'waiting for the opponent — share the code',
+  netConnected:(name)=>'connected · you play '+name,
+  netCreating:'creating a room…',
+  netJoining:(code)=>'joining room '+code+'…',
+  netSrvFail:'Relay service is not responding. Check your internet (a VPN sometimes helps) and try again.',
+  netJoinFail:'Could not connect: room not found or relay unavailable. Check the code and try again.',
+  netNoRoom:'Room not found — check the code',
+  netOffline:'No internet access',
+  netNeedCode:'Enter the room code — 4–5 characters',
+  netLibFail:'The relay library failed to load (no internet or a blocker). Refresh the page or open via an https link.',
+  netSrvShort:'Relay service unavailable — check your internet or try later',
+  netWebRTC:'Could not establish a direct connection',
+  netIncompat:'Browser does not support WebRTC',
+  netCodeBusy:'Code taken — trying another',
+  netErrPrefix:(t)=>'Connection error'+(t?' ('+t+')':''),
+  copyOk:(code)=>'Code copied: '+code,
+  copyFail:'Could not copy',
+  netLeftLocal:'Disconnected — local two-player game',
+  toastAI:'New game: you against the computer',
+  toastPvp:'New game: two players on this screen',
+  rejectedByYou:'You declined the request',
+  undoNetTitle:'Undo is unavailable in online games',
+  pairNetTitle:'Online side names are chosen by the room host',
+  sidesToast:(a,b)=>'Sides: '+a+' · '+b,
+  logEmptyStart:(name)=>'The game has not started — '+name+' moves first.',
+  logEmptyNet:(name,me)=>'Online game — '+name+' moves first'+(me?' (that is you)':' (opponent)')+'.',
+  logEmptyWait:'Waiting for an opponent — create a room or enter a code.',
+  langToast:'Language: English'
+}};
+let T=STR[lang];
+
+/* ═══ Пары сторон ════════════════════════
+   colors — цвета фигур;
+   board — палитра клеток (опционально);
+   stroke — обводка фигур по сторонам (опционально);
+   ui — цвета интерфейсных меток сторон (опционально);
+   page — оформление страницы (опционально). */
+const PAIRS=[
+  {ru:['Гранат','Нефрит'],  en:['Garnet','Jade'],
+   colors:['#7E201C','#557E5B'],
+   ui:['#A6342A','#7FAE8D'],
+   board:{l:'#D9CCA2',d:'#4B3B21'},
+   page:{paper:'#2C281A',paper2:'#37311F',ink:'#F0E7CE',inkSoft:'#A89D7E',
+         shadow:'rgba(0,0,0,.4)',theme:'#2C281A'}},
+  {ru:['Белый','Чёрный'],   en:['White','Black'],
+   colors:['#F8F4E6','#26221B'],
+   board:{l:'#FBFAF5',d:'#1C1913'},
+   stroke:['#241E13','#F5EFE0'],
+   page:{paper:'#F6F5F1',paper2:'#ECEBE6',ink:'#17150F',inkSoft:'#6C6A62',
+         shadow:'rgba(0,0,0,.14)',theme:'#F6F5F1'}},
+  {ru:['Дуб','Орех'],       en:['Oak','Walnut'],
+   colors:['#96622C','#5C3A1E']}
+];
+const DEF_CELL={l:'#EDE3C6',d:'#D2C298'};
+const DEF_PAGE={paper:'#F2EBDA',paper2:'#EAE0C8',ink:'#241E13',inkSoft:'#6B604C',
+                shadow:'rgba(36,30,19,.10)',theme:'#F2EBDA'};
+let pairIdx=0;
+try{const s=localStorage.getItem('garrisonPair');if(s!==null&&PAIRS[+s])pairIdx=+s;}catch(e){}
+
+const NAMES=['',''];
+const COLORS=['#6E1A17','#557E5B'];
+const UICOL=['#6E1A17','#557E5B'];
+
+function isLight(hex){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return (0.299*r+0.587*g+0.114*b)>170;
+}
+function darken(hex,f){
+  const h=n=>Math.round(parseInt(n,16)*f).toString(16).padStart(2,'0');
+  return '#'+h(hex.slice(1,3))+h(hex.slice(3,5))+h(hex.slice(5,7));
+}
+
+/* ═══ Константы игры ═════════════════════ */
+const N=8, FILES='abcdefgh';
+const ORDER=['Q','R','B','N'];
+const PIECES={
+  Q:{limit:2,
+     ru:{name:'Ферзь',letter:'Ф',nom:'ферзь',accE:'чужого ферзя',gen:'ферзя',fem:false},
+     en:{name:'Queen', letter:'Q',nom:'queen',accE:'an enemy queen',gen:'queen'}},
+  R:{limit:3,
+     ru:{name:'Ладья',letter:'Л',nom:'ладья',accE:'чужую ладью',gen:'ладьи',fem:true},
+     en:{name:'Rook',  letter:'R',nom:'rook',accE:'an enemy rook',gen:'rook'}},
+  B:{limit:Infinity,
+     ru:{name:'Слон',letter:'С',nom:'слон',accE:'чужого слона',gen:'слона',fem:false},
+     en:{name:'Bishop',letter:'B',nom:'bishop',accE:'an enemy bishop',gen:'bishop'}},
+  N:{limit:Infinity,
+     ru:{name:'Конь',letter:'К',nom:'конь',accE:'чужого коня',gen:'коня',fem:false},
+     en:{name:'Knight',letter:'N',nom:'knight',accE:'an enemy knight',gen:'knight'}}
+};
+function PC(t){return PIECES[t][lang];}
+const TW={Q:2.4,R:1.7,B:1.4,N:1.2};
+const ORTHO=[[0,1],[0,-1],[1,0],[-1,0]];
+const DIAG =[[1,1],[1,-1],[-1,1],[-1,-1]];
+const ALL  =ORTHO.concat(DIAG);
+const KN   =[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+
+/* ═══ Состояние ══════════════════════════ */
+let board=null, history=[], logEntries=[], logEmptyFn=()=>T.logEmptyStart(NAMES[0]);
+let current=0, chosen='N', over=false, locked=false, skipStreak=0;
+let counts, totals, mode='pvp', starter=0;
+let hoverIdx=-1, previewIdx=-1;
+const canHover=window.matchMedia&&matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+/* ═══ Сеть ═══════════════════════════════ */
+const net={peer:null,conn:null,role:'host',mySide:0,code:'',connected:false,tries:0,
+           creating:false,joining:false,to:null};
+let pendingReq=false, lastSeen=0, pingTimer=null;
+const AZ='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function genCode(n){let s='';for(let i=0;i<n;i++)s+=AZ[Math.floor(Math.random()*AZ.length)];return s;}
+function peerErrText(e){
+  const t=e&&e.type?e.type:'';
+  if(t==='browser-incompatible')return T.netIncompat;
+  if(t==='network'||t==='server-error'||t==='socket-error')return T.netSrvShort;
+  if(t==='webrtc')return T.netWebRTC;
+  if(t==='unavailable-id')return T.netCodeBusy;
+  return T.netErrPrefix(t);
+}
+function netSend(o){try{if(net.conn&&net.conn.open)net.conn.send(o);}catch(e){}}
+function netErr(m){const el=$('netErr');if(el)el.textContent=m||'';}
+function netStat(id,m,busy){const el=$(id);if(el){el.textContent=m;el.classList.toggle('busy',!!busy);}}
+function netBusy(msg){
+  netErr('');
+  const b1=$('btnCreate'),b2=$('btnJoin');
+  if(b1)b1.disabled=true;
+  if(b2)b2.disabled=true;
+  netStat('netSetupStat',msg,true);
+}
+function netIdle(){
+  const b1=$('btnCreate'),b2=$('btnJoin');
+  if(b1)b1.disabled=false;
+  if(b2)b2.disabled=false;
+  netStat('netSetupStat','');
+}
+function netFail(msg){
+  net.creating=false;net.joining=false;
+  if(net.to){clearTimeout(net.to);net.to=null;}
+  netIdle();
+  netErr(msg);
+}
+function ensurePeerLib(){
+  if(window.Peer)return true;
+  netFail(T.netLibFail);
+  return false;
+}
+function stopPing(){if(pingTimer){clearInterval(pingTimer);pingTimer=null;}}
+function startPing(){
+  stopPing();lastSeen=Date.now();
+  pingTimer=setInterval(()=>{
+    if(!net.connected){stopPing();return;}
+    if(Date.now()-lastSeen>30000){netLost(T.netOppLost);return;}
+    netSend({t:'p'});
+  },5000);
+}
+function netCleanup(){
+  stopPing();
+  if(net.to){clearTimeout(net.to);net.to=null;}
+  if(net.conn){try{net.conn.close();}catch(e){}}
+  if(net.peer){try{net.peer.destroy();}catch(e){}}
+  net.conn=null;net.peer=null;net.connected=false;net.code='';
+  net.tries=0;net.creating=false;net.joining=false;pendingReq=false;
+}
+function netLost(msg){
+  if(!net.peer&&!net.conn)return;
+  netCleanup();
+  netIdle();
+  toast(msg);
+  render();
+  if($('netVeil').classList.contains('on'))renderNetModal();
+}
+function netWire(c){
+  c.on('open',()=>{
+    if(net.to){clearTimeout(net.to);net.to=null;}
+    net.connected=true;net.creating=false;net.joining=false;
+    lastSeen=Date.now();
+    netIdle();
+    $('netVeil').classList.remove('on');
+    if(net.role==='host')netSend({t:'cfg',pair:pairIdx});
+    toast(net.role==='host'?T.netOppJoined(NAMES[0]):T.netJoinedGuest);
+    netReset(0);
+    startPing();
+  });
+  c.on('data',netOnData);
+  c.on('close',()=>{if(net.conn===c)netLost(T.netOppLeft);});
+  c.on('error',()=>{});
+}
+function netOnData(d){
+  if(!d||typeof d!=='object')return;
+  lastSeen=Date.now();
+  if(d.t==='p'){netSend({t:'q'});return;}
+  if(d.t==='q')return;
+  if(d.t==='cfg'){applyPair(d.pair|0,false);return;}
+  if(d.t==='mv'){
+    const mover=1-net.mySide;
+    if(!net.connected||over||current!==mover){desync();return;}
+    if(d.i===undefined||!PIECES[d.t]||board[d.i]||!isValidMove(board,d.i,d.t,mover).ok){desync();return;}
+    applyMove(d.i,d.t);
+    return;
+  }
+  if(d.t==='pass'){
+    const p=1-net.mySide;
+    if(!net.connected||over||current!==p)return;
+    applyPass(p,false);
+    return;
+  }
+  if(d.t==='bye'){netLost(T.netBye);return;}
+  if(d.t==='newreq'){
+    if(pendingReq){sendNew();return;}
+    $('reqText').textContent=T.netNewReq(NAMES[1-net.mySide]);
+    $('reqVeil').classList.add('on');
+    return;
+  }
+  if(d.t==='new'){
+    pendingReq=false;
+    $('reqVeil').classList.remove('on');
+    const ns=(d.starter===0||d.starter===1)?d.starter:0;
+    netReset(ns);
+    toast(T.netNewStart(NAMES[ns]));
+    return;
+  }
+  if(d.t==='newrej'){pendingReq=false;toast(T.netRejected);return;}
+}
+function desync(){
+  over=true;
+  toast(T.netDesync);
+  render();
+}
+function sendNew(){
+  const ns=1-starter;
+  pendingReq=false;
+  netSend({t:'new',starter:ns});
+  netReset(ns);
+  toast(T.netNewStart(NAMES[ns]));
+}
+function proposeNew(){
+  if(!net.connected){toast(T.netNoLink);return;}
+  if(pendingReq){toast(T.netAlready);return;}
+  netSend({t:'newreq'});pendingReq=true;
+  toast(T.netSent);
+}
+function netCreate(){
+  if(!ensurePeerLib())return;
+  if(!navigator.onLine){netFail(T.netOffline);return;}
+  netCleanup();
+  net.role='host';net.mySide=0;net.creating=true;
+  netBusy(T.netCreating);
+  createPeer();
+  function createPeer(){
+    net.tries++;
+    const code=genCode(5);
+    let opened=false;
+    netBusy(T.netCreating);
+    const p=new Peer('fieldchess-x1-'+code,{debug:0});
+    net.peer=p;
+    if(net.to)clearTimeout(net.to);
+    net.to=setTimeout(()=>{
+      if(opened||net.connected)return;
+      try{p.destroy();}catch(e){}
+      if(net.tries<3)createPeer();
+      else netFail(T.netSrvFail);
+    },12000);
+    p.on('open',()=>{
+      opened=true;
+      if(net.to){clearTimeout(net.to);net.to=null;}
+      net.creating=false;
+      net.code=code;
+      renderNetModal();
+      setNetStat('netRoomStat',T.netWaitHost,true);
+      toast(T.netReady(code));
+    });
+    p.on('connection',c=>{
+      if(net.conn&&net.conn!==c){try{net.conn.close();}catch(e){}}
+      net.conn=c;netWire(c);
+    });
+    p.on('disconnected',()=>{try{if(!p.destroyed)p.reconnect();}catch(e){}});
+    p.on('error',e=>{
+      if(e&&e.type==='unavailable-id'){
+        if(net.tries<4){try{p.destroy();}catch(x){}createPeer();}
+        return;
+      }
+      if(!opened){
+        if(net.to){clearTimeout(net.to);net.to=null;}
+        try{p.destroy();}catch(x){}
+        netFail(peerErrText(e));
+      }else{
+        setNetStat('netRoomStat',peerErrText(e),false);
+      }
+    });
+  }
+}
+function netJoin(raw){
+  if(!ensurePeerLib())return;
+  if(!navigator.onLine){netFail(T.netOffline);return;}
+  const code=(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length<4){netFail(T.netNeedCode);return;}
+  netCleanup();
+  net.role='guest';net.mySide=1;net.joining=true;
+  netBusy(T.netJoining(code));
+  const p=new Peer({debug:0});
+  net.peer=p;
+  if(net.to)clearTimeout(net.to);
+  net.to=setTimeout(()=>{
+    if(net.connected)return;
+    try{p.destroy();}catch(e){}
+    netFail(T.netJoinFail);
+  },15000);
+  p.on('open',()=>{
+    const c=p.connect('fieldchess-x1-'+code,{reliable:true});
+    net.conn=c;netWire(c);
+  });
+  p.on('disconnected',()=>{if(!net.connected){try{p.reconnect();}catch(e){}}});
+  p.on('error',e=>{
+    if(net.connected)return;
+    if(net.to){clearTimeout(net.to);net.to=null;}
+    try{p.destroy();}catch(x){}
+    netFail(e&&e.type==='peer-unavailable'?T.netNoRoom:peerErrText(e));
+  });
+}
+function renderNetModal(){
+  if(!window.Peer){
+    $('netSetup').style.display='block';
+    $('netRoom').style.display='none';
+    netFail(T.netLibFail);
+    return;
+  }
+  const inRoom=!!(net.peer&&(net.code||net.connected));
+  $('netSetup').style.display=inRoom?'none':'block';
+  $('netRoom').style.display=inRoom?'block':'none';
+  if(inRoom){
+    $('netCodeBig').textContent=net.code||'—';
+    if(net.connected){
+      setNetStat('netRoomStat',T.netConnected(net.mySide===0?NAMES[0]:NAMES[1]),false);
+      netIdle();
+    }
+  }else{
+    netErr('');
+  }
+}
+function openNetModal(){renderNetModal();$('netVeil').classList.add('on');}
+
+/* ═══ Геометрия и правила ════════════════ */
+const idxOf=(r,c)=>r*N+c, rc=i=>[Math.floor(i/N), i%N];
+const inB=(r,c)=>r>=0&&r<N&&c>=0&&c<N;
+const not=i=>{const[r,c]=rc(i);return FILES[c]+(8-r);};
+
+function attackTargets(bd,i,t){
+  const out=[], [r,c]=rc(i);
+  if(t==='N'){
+    for(const[dr,dc]of KN){const nr=r+dr,nc=c+dc;if(inB(nr,nc))out.push(idxOf(nr,nc));}
+    return out;
+  }
+  const dirs=t==='Q'?ALL:t==='R'?ORTHO:DIAG;
+  for(const[dr,dc]of dirs){
+    let nr=r+dr,nc=c+dc;
+    while(inB(nr,nc)){const j=idxOf(nr,nc);out.push(j);if(bd[j])break;nr+=dr;nc+=dc;}
+  }
+  return out;
+}
+function attackersOf(bd,i,p){
+  const out=[], [r,c]=rc(i);
+  for(const[dr,dc]of KN){
+    const nr=r+dr,nc=c+dc;if(!inB(nr,nc))continue;
+    const q=bd[idxOf(nr,nc)];
+    if(q&&q.p===p&&q.t==='N')out.push(idxOf(nr,nc));
+  }
+  for(const[dr,dc]of ALL){
+    let nr=r+dr,nc=c+dc;
+    while(inB(nr,nc)){
+      const j=idxOf(nr,nc), q=bd[j];
+      if(q){
+        const straight=(dr===0||dc===0);
+        if(q.p===p&&(q.t==='Q'||(q.t==='R'&&straight)||(q.t==='B'&&!straight)))out.push(j);
+        break;
+      }
+      nr+=dr;nc+=dc;
+    }
+  }
+  return out;
+}
+function isValidMove(bd,i,t,p){
+  if(bd[i])return{ok:false,reason:'occupied'};
+  for(const j of attackTargets(bd,i,t)){const q=bd[j];if(q&&q.p!==p)return{ok:false,reason:'attacks'};}
+  if(attackersOf(bd,i,1-p).length)return{ok:false,reason:'attacked'};
+  return{ok:true};
+}
+function reasonText(r){
+  return r==='attacks'?T.errAttacks
+    :r==='attacked'?T.errAttacked
+    :T.occupied;
+}
+function remaining(p,t){const L=PIECES[t].limit;return L===Infinity?Infinity:L-counts[p][t];}
+function countValid(p,t){let n=0;for(let i=0;i<64;i++)if(!board[i]&&isValidMove(board,i,t,p).ok)n++;return n;}
+function totalValid(p){let n=0;for(const t of ORDER)if(remaining(p,t)>0)n+=countValid(p,t);return n;}
+function hasAnyMove(p){
+  for(const t of ORDER)if(remaining(p,t)>0&&countValid(p,t)>0)return true;
+  return false;
+}
+function recalc(){
+  counts=[{Q:0,R:0,B:0,N:0},{Q:0,R:0,B:0,N:0}];totals=[0,0];
+  for(const q of board)if(q){counts[q.p][q.t]++;totals[q.p]++;}
+}
+
+/* ═══ DOM ════════════════════════════════ */
+const $=id=>document.getElementById(id);
+const boardEl=$('board'), olay=$('olay'), logEl=$('log'), captionEl=$('caption');
+const cells=[];
+for(let i=0;i<64;i++){
+  const d=document.createElement('div');
+  const[r,c]=rc(i);
+  d.className='cell'+(((r+c)%2)?' dk':'');
+  d.dataset.i=i;
+  d.innerHTML='<span class="dot"></span><div class="pc"></div>';
+  boardEl.insertBefore(d,olay);
+  cells.push(d);
+}
+ $('ranks').innerHTML=Array.from({length:8},(_,k)=>`<span>${8-k}</span>`).join('');
+ $('files').innerHTML=FILES.split('').map(f=>`<span>${f}</span>`).join('');
+const arEl=$('arsenal');
+ORDER.forEach((t,k)=>{
+  const row=document.createElement('div');
+  row.className='arow';row.dataset.t=t;
+  row.innerHTML=`<kbd>${k+1}</kbd><span class="afi"><svg viewBox="0 0 100 100"><use href="#pc-${t}"/></svg></span>
+    <span class="anm"></span><span class="arem"></span>`;
+  row.addEventListener('click',()=>{if(interactive()&&remaining(current,t)>0){chosen=t;render();}});
+  arEl.appendChild(row);
+});
+function pieceSVG(t,p,cls='piece'){
+  let scls='';
+  const ST=PAIRS[pairIdx].stroke;
+  if(ST){ scls=isLight(ST[p])?' dkst':' lite'; }
+  else if(isLight(COLORS[p])){ scls=' lite'; }
+  return `<svg class="${cls} p${p}${scls}" viewBox="0 0 100 100"><use href="#pc-${t}"/></svg>`;
+}
+
+/* ═══ Плашки выбора пар сторон ═══════════ */
+const pairsEl=$('pairs');
+const pairChips=[];
+PAIRS.forEach((P,k)=>{
+  const b=document.createElement('button');
+  b.className='pchip';b.type='button';
+  const ring=c=>isLight(c)?'rgba(36,30,19,.75)':'rgba(242,235,218,.9)';
+  b.innerHTML='<span class="pdots">'+
+    '<i style="background:'+P.colors[0]+';box-shadow:0 0 0 1.5px '+ring(P.colors[0])+'"></i>'+
+    '<i style="background:'+P.colors[1]+';box-shadow:0 0 0 1.5px '+ring(P.colors[1])+'"></i>'+
+    '</span><span class="pname"></span>';
+  b.addEventListener('click',()=>{
+    if(mode==='net'||k===pairIdx)return;
+    applyPair(k);
+    toast(T.sidesToast(NAMES[0],NAMES[1]));
+  });
+  pairsEl.appendChild(b);
+  pairChips.push(b);
+});
+function renderPairs(){
+  PAIRS.forEach((P,k)=>{
+    const b=pairChips[k];
+    b.classList.toggle('on',k===pairIdx);
+    b.disabled=(mode==='net');
+    b.querySelector('.pname').textContent=P[lang][0]+' · '+P[lang][1];
+  });
+  pairsEl.title=mode==='net'?T.pairNetTitle:'';
+}
+
+/* ═══ Звук ═══════════════════════════════ */
+let AC;
+function tick(f=200,d=.06,v=.06){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='triangle';o.frequency.value=f;
+    g.gain.setValueAtTime(v,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);
+    o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d);
+  }catch(e){}
+}
+
+/* ═══ Тост ═══════════════════════════════ */
+let toastT;
+function toast(m){
+  const t=$('toast');t.textContent=m;t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2400);
+}
+
+/* ═══ Лог ════════════════════════════════ */
+function renderLog(){
+  logEl.innerHTML='';
+  if(!logEntries.length){
+    const d=document.createElement('div');d.className='empty';
+    d.textContent=logEmptyFn();
+    logEl.appendChild(d);
+    return;
+  }
+  logEntries.forEach(e=>{
+    const row=document.createElement('div');row.className='li';row.dataset.p=e.p;
+    const n=document.createElement('span');n.className='n';n.textContent=String(e.n).padStart(2,'0');
+    const pip=document.createElement('span');pip.className='pip';pip.style.background=COLORS[e.p];
+    const who=document.createElement('span');who.className='who';who.textContent=NAMES[e.p];
+    const mv=document.createElement('span');mv.className='mv';
+    mv.textContent=e.skip?T.logPass:PC(e.t).letter+' '+e.sq;
+    row.append(n,pip,who,mv);
+    logEl.appendChild(row);
+  });
+}
+function addLog(e){logEntries.push(e);renderLog();}
+function removeLastLog(){
+  logEntries.pop();
+  if(!logEntries.length)logEmptyFn=()=>T.logEmptyHistory;
+  renderLog();
+}
+
+/* ═══ Пара сторон (+ тема страницы) ══════ */
+function applyPair(k,save=true){
+  pairIdx=((k%PAIRS.length)+PAIRS.length)%PAIRS.length;
+  const P=PAIRS[pairIdx];
+  NAMES[0]=P[lang][0];NAMES[1]=P[lang][1];
+  COLORS[0]=P.colors[0];COLORS[1]=P.colors[1];
+  UICOL[0]=P.ui?P.ui[0]:(isLight(COLORS[0])?darken(COLORS[0],.52):COLORS[0]);
+  UICOL[1]=P.ui?P.ui[1]:(isLight(COLORS[1])?darken(COLORS[1],.52):COLORS[1]);
+  const B=P.board||DEF_CELL;
+  const PG=P.page||DEF_PAGE;
+  const st=document.documentElement.style;
+  st.setProperty('--red',UICOL[0]);
+  st.setProperty('--teal',UICOL[1]);
+  st.setProperty('--pcol0',COLORS[0]);
+  st.setProperty('--pcol1',COLORS[1]);
+  st.setProperty('--cell-l',B.l);
+  st.setProperty('--cell-d',B.d);
+  st.setProperty('--paper',PG.paper);
+  st.setProperty('--paper2',PG.paper2);
+  st.setProperty('--ink',PG.ink);
+  st.setProperty('--ink-soft',PG.inkSoft);
+  st.setProperty('--shadow',PG.shadow);
+  const tm=document.querySelector('meta[name="theme-color"]');
+  if(tm)tm.setAttribute('content',PG.theme);
+  renderPairs();
+  renderLog();
+  if(save){try{localStorage.setItem('garrisonPair',String(pairIdx));}catch(e){}}
+  if(board)render();
+}
+
+/* ═══ Язык ═══════════════════════════════ */
+function applyLang(){
+  T=STR[lang];
+  document.documentElement.lang=lang;
+  document.title=T.title;
+  $('topLeft').textContent=T.topLeft;
+  $('h1').textContent=T.h1;
+  document.querySelectorAll('#modeSeg button').forEach(b=>{b.textContent=T['mode_'+b.dataset.mode];});
+  $('btnRules').textContent=T.rules;
+  $('btnNew').textContent=T.newGame;
+  $('btnUndo').textContent=T.undo;
+  $('btnEnd').textContent=T.end;
+  $('rulesTitle').textContent=T.rulesTitle;
+  $('rulesList').innerHTML=T.rulesList.map(li=>'<li>'+li+'</li>').join('');
+  $('rulesNet').innerHTML=T.rulesNet;
+  $('btnRulesClose').textContent=T.ok;
+  $('netTitle').textContent=T.netTitle;
+  $('netP').textContent=T.netP;
+  $('btnCreate').textContent=T.createRoom;
+  $('orSpan').textContent=T.or;
+  $('netCode').placeholder=T.codePh;
+  $('btnJoin').textContent=T.join;
+  $('netHint').textContent=T.netHint;
+  $('netLab').textContent=T.roomCode;
+  $('btnCopyCode').textContent=T.copyCode;
+  $('btnNetLeave').textContent=T.disconnect;
+  $('btnNetClose').textContent=T.close;
+  $('reqTitle').textContent=T.reqTitle;
+  $('reqText').textContent=T.reqText;
+  $('reqNo').textContent=T.reject;
+  $('reqYes').textContent=T.accept;
+  $('endTitle').textContent=T.endTitle;
+  $('endP').textContent=T.endP;
+  $('btnEndNo').textContent=T.keepPlaying;
+  $('btnEndYes').textContent=T.finish;
+  $('btnLook').textContent=T.look;
+  $('btnRematch').textContent=T.rematch;
+  arEl.querySelectorAll('.arow').forEach(row=>{
+    row.querySelector('.anm').textContent=PC(row.dataset.t).name;
+  });
+  document.querySelectorAll('#langSeg button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
+  applyPair(pairIdx,false);
+  renderLog();
+  if(net.connected&&$('netVeil').classList.contains('on'))renderNetModal();
+  if(board)render();else captionEl.innerHTML=capDefault();
+}
+
+/* ═══ Режимы взаимодействия ═══════════════ */
+function interactive(){
+  if(over||locked)return false;
+  if(mode==='ai')return current===0;
+  if(mode==='net')return net.connected&&current===net.mySide;
+  return true;
+}
+
+/* ═══ Подсказка под доской ════════════════ */
+function capDefault(){
+  if(mode==='net'&&!net.connected)return T.capNetWait;
+  return T.capLocal;
+}
+function describeCell(i){
+  const sq=not(i), P=PC(chosen);
+  const nm=P.name.toLowerCase(), fem=P.fem;
+  const q=board[i];
+  if(q)return T.descOccupied(sq,q.p===current,PC(q.t).nom);
+  const v=isValidMove(board,i,chosen,current);
+  if(!v.ok){
+    if(v.reason==='attacks'){
+      const victims=attackTargets(board,i,chosen).filter(j=>board[j]&&board[j].p!==current);
+      return victims.length
+        ?T.descAttacks(nm,sq,fem,P.accE,victims.length>1?victims.length-1:0)
+        :T.errAttacks;
+    }
+    if(v.reason==='attacked'){
+      const att=attackersOf(board,i,1-current);
+      return att.length
+        ?T.descAttacked(nm,sq,PC(board[att[0]].t).gen,not(att[0]),att.length>1?att.length-1:0)
+        :T.errAttacked;
+    }
+    return T.occupied;
+  }
+  return T.descOk(nm,sq);
+}
+
+/* ═══ Hover / превью ═════════════════════ */
+const center=i=>{const[r,c]=rc(i);return[(c+.5)*100,(r+.5)*100];};
+function clearHover(){
+  hoverIdx=-1;
+  olay.innerHTML='';
+  cells.forEach(c=>{c.classList.remove('prevy');const g=c.querySelector('.ghostp');if(g)g.remove();});
+}
+function svgEl(tag,attrs){
+  const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const k in attrs)el.setAttribute(k,attrs[k]);
+  olay.appendChild(el);
+}
+function cross(x,y,col){
+  svgEl('line',{x1:x-20,y1:y-20,x2:x+20,y2:y+20,stroke:col,'stroke-width':6,'stroke-linecap':'round',opacity:.95});
+  svgEl('line',{x1:x-20,y1:y+20,x2:x+20,y2:y-20,stroke:col,'stroke-width':6,'stroke-linecap':'round',opacity:.95});
+}
+function linkLine(x1,y1,x2,y2,col,dash){
+  const a={x1,y1,x2,y2,stroke:col,'stroke-width':3,'stroke-linecap':'round',opacity:.9};
+  if(dash)a['stroke-dasharray']=dash;
+  svgEl('line',a);
+}
+function drawHover(i){
+  clearHover();hoverIdx=i;
+  const col=UICOL[current], cs=center(i);
+  const v=isValidMove(board,i,chosen,current);
+  if(v.reason==='attacks'){
+    for(const j of attackTargets(board,i,chosen)){
+      if(board[j]&&board[j].p!==current){
+        const[tx,ty]=center(j);
+        if(chosen==='N'){
+          const[r1,c1]=rc(i),[r2,c2]=rc(j);
+          const horizLong=Math.abs(c2-c1)===2;
+          const ex=horizLong?tx:cs[0], ey=horizLong?cs[1]:ty;
+          svgEl('polyline',{points:`${cs[0]},${cs[1]} ${ex},${ey} ${tx},${ty}`,fill:'none',stroke:col,
+            'stroke-width':3,'stroke-linecap':'round','stroke-linejoin':'round',opacity:.9});
+        }else linkLine(cs[0],cs[1],tx,ty,col,null);
+        cross(tx,ty,col);
+      }
+    }
+  }else if(v.reason==='attacked'){
+    for(const j of attackersOf(board,i,1-current)){
+      const[tx,ty]=center(j);
+      linkLine(tx,ty,cs[0],cs[1],col,'3 7');
+    }
+    cross(cs[0],cs[1],col);
+  }
+  cells[i].classList.add('prevy');
+  cells[i].insertAdjacentHTML('beforeend',pieceSVG(chosen,current,'ghostp'));
+}
+boardEl.addEventListener('mouseover',e=>{
+  if(!canHover)return;
+  const cell=e.target.closest('.cell');
+  if(!cell||!interactive())return;
+  const i=+cell.dataset.i;
+  if(i===hoverIdx)return;
+  if(!board[i])drawHover(i);else clearHover();
+  captionEl.innerHTML=describeCell(i);
+});
+boardEl.addEventListener('mouseleave',()=>{
+  if(!canHover)return;
+  clearHover();
+  captionEl.innerHTML=capDefault();
+});
+
+/* ═══ Клик по клетке ═════════════════════ */
+boardEl.addEventListener('click',e=>{
+  const cell=e.target.closest('.cell');
+  if(!cell)return;
+  if(mode==='net'&&net.connected&&!over&&current!==net.mySide){toast(T.notYourTurn);return;}
+  if(!interactive())return;
+  const i=+cell.dataset.i;
+  const v=isValidMove(board,i,chosen,current);
+  if(!v.ok){
+    cell.classList.remove('shake');void cell.offsetWidth;cell.classList.add('shake');
+    if(!board[i])drawHover(i);
+    captionEl.innerHTML=describeCell(i);
+    toast(reasonText(v.reason));
+    tick(110,.09,.05);
+    return;
+  }
+  if(!canHover&&previewIdx!==i){
+    previewIdx=i;
+    drawHover(i);
+    captionEl.innerHTML=describeCell(i);
+    tick(170,.05,.045);
+    return;
+  }
+  place(i,chosen);
+});
+
+/* ═══ Ходы ═══════════════════════════════ */
+function applyMove(i,t){
+  board[i]={p:current,t};
+  history.push({idx:i,p:current,t});
+  addLog({n:history.length,p:current,t:t,sq:not(i)});
+  tick(210,.06,.07);
+  current=1-current;
+  beginTurn();
+  const h=history[history.length-1], cell=cells[h.idx];
+  const svg=cell.querySelector('.piece');if(svg)svg.classList.add('just');
+  const rip=document.createElement('span');rip.className='ripple';
+  rip.style.setProperty('--pc',UICOL[h.p]);
+  cell.appendChild(rip);
+  rip.addEventListener('animationend',()=>rip.remove());
+}
+function place(i,t){
+  previewIdx=-1;
+  applyMove(i,t);
+  if(mode==='net')netSend({t:'mv',i:i,t:t});
+}
+function applyPass(p,mine){
+  skipStreak++;
+  addLog({n:history.length+skipStreak,p:p,skip:true});
+  if(skipStreak>=2){render();endGame(false);return;}
+  toast(mine&&mode==='net'?T.passMine:T.passToast(NAMES[p]));
+  tick(140,.1,.05);
+  current=1-p;
+  beginTurn();
+}
+function beginTurn(){
+  recalc();clearHover();
+  if(!hasAnyMove(current)){
+    if(mode==='net'){
+      if(net.connected&&current===net.mySide){
+        netSend({t:'pass'});
+        applyPass(current,true);
+      }else{
+        render();
+      }
+      return;
+    }
+    applyPass(current,true);
+    return;
+  }
+  skipStreak=0;
+  render();
+  if(mode==='ai'&&current===1)aiTurn();
+}
+function undo(){
+  if(mode==='net')return;
+  if(!history.length||locked)return;
+  let last=history.pop();board[last.idx]=null;removeLastLog();
+  if(mode==='ai'&&last.p===1&&history.length){const prev=history.pop();board[prev.idx]=null;removeLastLog();}
+  over=false;skipStreak=0;current=last.p;previewIdx=-1;
+  $('finVeil').classList.remove('on');
+  render();
+}
+
+/* ═══ Компьютер ══════════════════════════ */
+function aiTurn(){
+  locked=true;render();
+  setTimeout(()=>{
+    locked=false;
+    if(over)return;
+    const moves=[];
+    for(const t of ORDER){
+      if(remaining(1,t)<=0)continue;
+      for(let i=0;i<64;i++)if(!board[i]&&isValidMove(board,i,t,1).ok)moves.push({i,t});
+    }
+    if(!moves.length){beginTurn();return;}
+    const oppBefore=totalValid(0);
+    let best=null,bestS=-1e9;
+    for(const m of moves){
+      board[m.i]={p:1,t:m.t};
+      const post=totalValid(1), oppAfter=totalValid(0);
+      board[m.i]=null;
+      const[r,c]=rc(m.i);
+      const centr=(3.5-Math.max(Math.abs(r-3.5),Math.abs(c-3.5)))*.5;
+      const s=post*1.6+(oppBefore-oppAfter)*.8+TW[m.t]+centr+Math.random()*.6;
+      if(s>bestS){bestS=s;best=m;}
+    }
+    place(best.i,best.t);
+  },650+Math.random()*450);
+}
+
+/* ═══ Конец партии ═══════════════════════ */
+function endGame(early){
+  over=true;locked=false;recalc();
+  const w=totals[0]>totals[1]?0:totals[1]>totals[0]?1:-1;
+  render();
+  tick(240,.1,.06);setTimeout(()=>tick(300,.12,.06),130);if(w>=0)setTimeout(()=>tick(370,.16,.06),280);
+  setTimeout(()=>{
+    $('finKicker').textContent=early?T.finEarly:T.finNoMoves;
+    $('finS0').textContent=totals[0];$('finS1').textContent=totals[1];
+    const st=$('finStamp');
+    if(w>=0){st.textContent=T.stampWin(NAMES[w]);st.style.setProperty('--sc',UICOL[w]);}
+    else{st.textContent=T.stampDraw;st.style.setProperty('--sc','var(--ink)');}
+    $('finSub').textContent=early?T.finSubEarly:T.finSubFair;
+    $('finVeil').classList.add('on');
+  },550);
+}
+
+/* ═══ Рендер ═════════════════════════════ */
+function render(){
+  recalc();clearHover();previewIdx=-1;
+  captionEl.innerHTML=capDefault();
+  if(remaining(current,chosen)<=0){
+    chosen=ORDER.find(t=>remaining(current,t)>0)||chosen;
+  }
+  const canAct=interactive();
+  const valid=new Set();
+  if(canAct&&remaining(current,chosen)>0){
+    for(let i=0;i<64;i++)if(!board[i]&&isValidMove(board,i,chosen,current).ok)valid.add(i);
+  }
+  const lastIdx=history.length?history[history.length-1].idx:-1;
+  for(let i=0;i<64;i++){
+    const el=cells[i],q=board[i];
+    el.querySelector('.pc').innerHTML=q?pieceSVG(q.t,q.p):'';
+    const isV=canAct&&valid.has(i);
+    el.classList.toggle('valid',isV);
+    el.classList.toggle('last',i===lastIdx);
+    const dot=el.querySelector('.dot');
+    if(dot)dot.style.background=UICOL[current];
+    if(isV){
+      const[r,c]=rc(i);
+      el.style.setProperty('--d',(Math.hypot(r-3.5,c-3.5)*.05).toFixed(2)+'s');
+      el.style.setProperty('--pc',UICOL[current]);
+    }else{
+      el.style.removeProperty('--pc');
+      if(i===lastIdx&&q)el.style.setProperty('--pc',UICOL[q.p]);
+    }
+  }
+  boardEl.style.setProperty('--pc',UICOL[current]);
+  arEl.style.setProperty('--pc',UICOL[current]);
+  $('fs0').textContent=totals[0];$('fs1').textContent=totals[1];
+  $('nm0').textContent=NAMES[0]+(mode==='net'&&net.connected&&net.mySide===0?T.you:'');
+  $('nm1').textContent=NAMES[1]+(mode==='net'&&net.connected&&net.mySide===1?T.you:'');
+  $('side0').classList.toggle('act',!over&&current===0);
+  $('side1').classList.toggle('act',!over&&current===1);
+  arEl.querySelectorAll('.arow').forEach(row=>{
+    const t=row.dataset.t,rem=remaining(current,t);
+    row.classList.toggle('on',canAct&&chosen===t&&rem>0);
+    row.classList.toggle('off',rem<=0);
+    row.querySelector('.arem').textContent=rem===Infinity?'∞':'×'+rem;
+  });
+  const t1=$('turnT1'),t2=$('turnT2');
+  if(over){
+    t1.textContent=T.tcOver;
+    t2.textContent=T.tcOverSub(totals[0],totals[1]);
+  }else if(mode==='net'){
+    if(!net.connected){
+      t1.textContent=T.tcNetWait;
+      t2.textContent=T.tcNetWaitSub;
+    }else if(current===net.mySide){
+      t1.textContent=T.tcYour(NAMES[current]);
+      t2.textContent=(totals[current]===0?T.tcFirst:'')+T.tcPiece(PC(chosen).name);
+    }else{
+      t1.textContent=T.tcOpp(NAMES[current]);
+      t2.textContent=T.tcWaiting;
+    }
+  }else if(mode==='ai'&&current===1){
+    t1.innerHTML=T.tcAI(NAMES[1])+'<span class="think"> …</span>';
+    t2.textContent=T.tcAIsub;
+  }else{
+    t1.textContent=T.tcLocal(history.length+1,NAMES[current]);
+    t2.textContent=(totals[current]===0?T.tcFirst:'')+T.tcChosen(PC(chosen).name);
+  }
+  $('btnUndo').disabled=mode==='net'||!history.length||locked;
+  $('btnUndo').title=mode==='net'?T.undoNetTitle:'';
+  $('btnEnd').style.display=mode==='net'?'none':'';
+  $('topRight').textContent=over
+    ?T.trOver
+    :mode==='net'
+      ?(net.connected
+        ?(net.code?T.trNet+' · '+net.code:T.trNet)
+        :T.trNoLink)
+      :T.trLocal(history.length+1,totals[0]+totals[1]);
+}
+
+/* ═══ Новые партии ═══════════════════════ */
+function newGame(){
+  starter=0;
+  board=Array(64).fill(null);
+  history=[];logEntries=[];
+  current=0;chosen='N';over=false;locked=false;skipStreak=0;previewIdx=-1;pendingReq=false;
+  logEmptyFn=()=>T.logEmptyStart(NAMES[0]);
+  renderLog();
+  $('finVeil').classList.remove('on');
+  $('reqVeil').classList.remove('on');
+  beginTurn();
+}
+function netReset(st){
+  starter=st;
+  board=Array(64).fill(null);
+  history=[];logEntries=[];
+  current=st;chosen='N';over=false;locked=false;skipStreak=0;previewIdx=-1;pendingReq=false;
+  logEmptyFn=()=>T.logEmptyNet(NAMES[st],st===net.mySide);
+  renderLog();
+  $('finVeil').classList.remove('on');
+  $('reqVeil').classList.remove('on');
+  beginTurn();
+}
+
+/* ═══ Копирование ════════════════════════ */
+function copyText(txt,okMsg){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>toast(okMsg)).catch(()=>fallbackCopy(txt,okMsg));
+  }else fallbackCopy(txt,okMsg);
+}
+function fallbackCopy(txt,okMsg){
+  const ta=document.createElement('textarea');
+  ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');toast(okMsg);}catch(e){toast(T.copyFail);}
+  ta.remove();
+}
+
+/* ═══ Кнопки и клавиатура ════════════════ */
+ $('btnNew').addEventListener('click',()=>{
+  if(mode==='net'){openNetModal();proposeNew();return;}
+  newGame();
+});
+ $('btnRematch').addEventListener('click',()=>{
+  if(mode==='net'){proposeNew();return;}
+  newGame();
+});
+ $('btnLook').addEventListener('click',()=>$('finVeil').classList.remove('on'));
+ $('btnUndo').addEventListener('click',undo);
+ $('btnRules').addEventListener('click',()=>$('rulesVeil').classList.add('on'));
+ $('btnRulesClose').addEventListener('click',()=>$('rulesVeil').classList.remove('on'));
+ $('btnEnd').addEventListener('click',()=>{if(!over&&mode!=='net')$('endVeil').classList.add('on');});
+ $('btnEndNo').addEventListener('click',()=>$('endVeil').classList.remove('on'));
+ $('btnEndYes').addEventListener('click',()=>{$('endVeil').classList.remove('on');endGame(true);});
+ $('reqYes').addEventListener('click',()=>{$('reqVeil').classList.remove('on');sendNew();});
+ $('reqNo').addEventListener('click',()=>{
+  $('reqVeil').classList.remove('on');
+  netSend({t:'newrej'});
+  тост(T.отклоненоВами);
+});
+ $('btnCreate').addEventListener('нажмите',netCreate);
+ $('btnJoin').addEventListener('нажмите',()=>netJoin($('netCode').ценить));
+ $('netCode').addEventListener('клавиша вниз',e=>{если(e.ключ===«Вход»)netJoin($('netCode').ценить);});
+ $('netCode').addEventListener('вход',e=>{
+  e.цель.ценить=e.цель.ценить.toUpperCase().заменять(/[^A-Z0-9]/г,'');
+});
+ $('btnCopyCode').addEventListener('нажмите',()=>копироватьТекст(сеть.код,T.копиОк(сеть.код)));
+ $('btnNetLeave').addEventListener('нажмите',()=>{
+  netОтправить({t:«пока»});
+  netCleanup();
+  netIdle();
+  $('netVeil').список классов.удалять('на');
+  setMode('пвп');
+  тост(T.netLeftLocal);
+});
+ $('btnNetClose').addEventListener('нажмите',()=>$('netVeil').список классов.удалять('на'));
+ $('modeSeg').addEventListener('нажмите',e=>{
+  константа b=e.цель.ближайший('кнопка');если(!b)возвращаться;
+  если(b.набор данных.режим==='сеть'&&режим==='сеть'){openNetModal();возвращаться;}
+  если(b.список классов.содержит('на'))возвращаться;
+  если(режим==='сеть'&&сеть.подключен)netОтправить({t:«пока»});
+  константа m=b.набор данных.режим;
+  setMode(m);
+  если(m==='ай')тост(T.тостаай);
+  еще если(m==='пвп')тост(T.тостПвп);
+});
+функция setMode(m){
+  режим=m;
+  документ.querySelectorAll('#modeSeg кнопка').дляКаждого(x=>x.список классов.переключатель('на',x.набор данных.режим===m));
+  renderPairs();
+  если(m==='сеть'){
+    netReset(0);
+    logEmptyFn=()=>T.logEmptyWait;
+    renderLog();
+    openNetModal();
+  }еще{
+    если(сеть.сверстник||сеть.конн)netCleanup();
+    новаяИгра();
+  }
+}
+ $('лангСег').addEventListener('нажмите',e=>{
+  константа b=e.цель.ближайший('кнопка');
+  если(!b||b.набор данных.язык===язык)возвращаться;
+  язык=b.набор данных.язык;
+  пытаться{локальное хранилище.setItem('гарнизонЛэнг',язык);}ловить(x){}
+  applyLang();
+  тост(T.langToast);
+});
+документ.addEventListener('клавиша вниз',e=>{
+  константа k=parseInt(e.ключ,10);
+  если(k>=1&&k<=4&&интерактивный()){
+    константа t=ЗАКАЗ[k-1];
+    если(оставшийся(текущий,t)>0){выбранный=t;оказывать();}
+  }
+});
+
+/* ═══ Запуск ═════════════════════════════ */
+applyLang();
+новаяИгра();
+</сценарий>
+</тело>
+       <//html>
