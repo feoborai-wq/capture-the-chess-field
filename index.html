@@ -580,12 +580,7 @@ en:{
 }};
 let T=STR[lang];
 
-/* ═══ Пары сторон ════════════════════════
-   colors — цвета фигур;
-   board — палитра клеток (опционально);
-   stroke — обводка фигур по сторонам (опционально);
-   ui — цвета интерфейсных меток сторон (опционально);
-   page — оформление страницы (опционально). */
+/* ═══ Пары сторон ════════════════════════ */
 const PAIRS=[
   {ru:['Гранат','Нефрит'],  en:['Garnet','Jade'],
    colors:['#7E201C','#557E5B'],
@@ -1499,67 +1494,67 @@ function fallbackCopy(txt,okMsg){
  $('reqNo').addEventListener('click',()=>{
   $('reqVeil').classList.remove('on');
   netSend({t:'newrej'});
-  тост(T.отклоненоВами);
+  toast(T.rejectedByYou);
 });
- $('btnCreate').addEventListener('нажмите',netCreate);
- $('btnJoin').addEventListener('нажмите',()=>netJoin($('netCode').ценить));
- $('netCode').addEventListener('клавиша вниз',e=>{если(e.ключ===«Вход»)netJoin($('netCode').ценить);});
- $('netCode').addEventListener('вход',e=>{
-  e.цель.ценить=e.цель.ценить.toUpperCase().заменять(/[^A-Z0-9]/г,'');
+ $('btnCreate').addEventListener('click',netCreate);
+ $('btnJoin').addEventListener('click',()=>netJoin($('netCode').value));
+ $('netCode').addEventListener('keydown',e=>{if(e.key==='Enter')netJoin($('netCode').value);});
+ $('netCode').addEventListener('input',e=>{
+  e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
 });
- $('btnCopyCode').addEventListener('нажмите',()=>копироватьТекст(сеть.код,T.копиОк(сеть.код)));
- $('btnNetLeave').addEventListener('нажмите',()=>{
-  netОтправить({t:«пока»});
+ $('btnCopyCode').addEventListener('click',()=>copyText(net.code,T.copyOk(net.code)));
+ $('btnNetLeave').addEventListener('click',()=>{
+  netSend({t:'bye'});
   netCleanup();
   netIdle();
-  $('netVeil').список классов.удалять('на');
-  setMode('пвп');
-  тост(T.netLeftLocal);
+  $('netVeil').classList.remove('on');
+  setMode('pvp');
+  toast(T.netLeftLocal);
 });
- $('btnNetClose').addEventListener('нажмите',()=>$('netVeil').список классов.удалять('на'));
- $('modeSeg').addEventListener('нажмите',e=>{
-  константа b=e.цель.ближайший('кнопка');если(!b)возвращаться;
-  если(b.набор данных.режим==='сеть'&&режим==='сеть'){openNetModal();возвращаться;}
-  если(b.список классов.содержит('на'))возвращаться;
-  если(режим==='сеть'&&сеть.подключен)netОтправить({t:«пока»});
-  константа m=b.набор данных.режим;
+ $('btnNetClose').addEventListener('click',()=>$('netVeil').classList.remove('on'));
+ $('modeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.mode==='net'&&mode==='net'){openNetModal();return;}
+  if(b.classList.contains('on'))return;
+  if(mode==='net'&&net.connected)netSend({t:'bye'});
+  const m=b.dataset.mode;
   setMode(m);
-  если(m==='ай')тост(T.тостаай);
-  еще если(m==='пвп')тост(T.тостПвп);
+  if(m==='ai')toast(T.toastAI);
+  else if(m==='pvp')toast(T.toastPvp);
 });
-функция setMode(m){
-  режим=m;
-  документ.querySelectorAll('#modeSeg кнопка').дляКаждого(x=>x.список классов.переключатель('на',x.набор данных.режим===m));
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.mode===m));
   renderPairs();
-  если(m==='сеть'){
+  if(m==='net'){
     netReset(0);
     logEmptyFn=()=>T.logEmptyWait;
     renderLog();
     openNetModal();
-  }еще{
-    если(сеть.сверстник||сеть.конн)netCleanup();
-    новаяИгра();
+  }else{
+    if(net.peer||net.conn)netCleanup();
+    newGame();
   }
 }
- $('лангСег').addEventListener('нажмите',e=>{
-  константа b=e.цель.ближайший('кнопка');
-  если(!b||b.набор данных.язык===язык)возвращаться;
-  язык=b.набор данных.язык;
-  пытаться{локальное хранилище.setItem('гарнизонЛэнг',язык);}ловить(x){}
+ $('langSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button');
+  if(!b||b.dataset.lang===lang)return;
+  lang=b.dataset.lang;
+  try{localStorage.setItem('garrisonLang',lang);}catch(x){}
   applyLang();
-  тост(T.langToast);
+  toast(T.langToast);
 });
-документ.addEventListener('клавиша вниз',e=>{
-  константа k=parseInt(e.ключ,10);
-  если(k>=1&&k<=4&&интерактивный()){
-    константа t=ЗАКАЗ[k-1];
-    если(оставшийся(текущий,t)>0){выбранный=t;оказывать();}
+document.addEventListener('keydown',e=>{
+  const k=parseInt(e.key,10);
+  if(k>=1&&k<=4&&interactive()){
+    const t=ORDER[k-1];
+    if(remaining(current,t)>0){chosen=t;render();}
   }
 });
 
 /* ═══ Запуск ═════════════════════════════ */
 applyLang();
-новаяИгра();
-</сценарий>
-</тело>
-       <//html>
+newGame();
+</script>
+</body>
+</html>
