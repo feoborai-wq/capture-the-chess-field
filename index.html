@@ -8,7 +8,7 @@
 <title>Field Chess — шахматная дуэль на выставление</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prata&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js"></script>
+<script src="https://gcore.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js"></script>
 <style>
 :root{
   color-scheme:only light;
@@ -463,7 +463,7 @@ ru:{
   netRoomBusy:'Комната уже занята — создайте новую',
   netOffline:'Нет доступа к интернету',
   netNeedCode:'Введите код комнаты — 4–5 символов',
-  netLibFail:'Библиотека связи не загрузилась ни с одного из четырёх зеркал (нет интернета или её режет блокировщик/VPN). Обновите страницу и попробуйте снова.',
+  netLibFail:'Библиотека связи не загрузилась ни с одного из пяти зеркал (нет интернета или её режет блокировщик/VPN). Обновите страницу и попробуйте снова.',
   netSrvShort:'Сервис связи недоступен — проверьте интернет или попробуйте позже',
   netWebRTC:'Не удалось установить прямое соединение',
   netIncompat:'Браузер не поддерживает WebRTC',
@@ -562,7 +562,7 @@ en:{
   netRoomBusy:'Room is already occupied — create a new one',
   netOffline:'No internet access',
   netNeedCode:'Enter the room code — 4–5 characters',
-  netLibFail:'The relay library failed to load from all four mirrors (no internet or a blocker/VPN). Refresh the page and try again.',
+  netLibFail:'The relay library failed to load from all five mirrors (no internet or a blocker/VPN). Refresh the page and try again.',
   netSrvShort:'Relay service unavailable — check your internet or try later',
   netWebRTC:'Could not establish a direct connection',
   netIncompat:'Browser does not support WebRTC',
@@ -659,10 +659,11 @@ const NET_RELAYS=[
   'wss://nostr-pub.wellorder.net'
 ];
 const NET_URLS=[
-  'https://cdn.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js',
+  'https://gcore.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js',
+  'https://fastly.jsdelivr.net/npm/trystero/dist/trystero-nostr.min.js',
   'https://unpkg.com/trystero/dist/trystero-nostr.min.js',
-  'https://cdn.jsdelivr.net/npm/trystero@0.20.0/dist/trystero-nostr.min.js',
-  'https://cdn.jsdelivr.net/gh/dmotz/trystero/dist/trystero-nostr.min.js'
+  'https://cdn.statically.io/gh/dmotz/trystero/main/dist/trystero-nostr.min.js',
+  'https://rawcdn.githack.com/dmotz/trystero/main/dist/trystero-nostr.min.js'
 ];
 let netLibPromise=null;
 function libReady(){return !!(window.trystero&&window.trystero.joinRoom);}
@@ -1576,7 +1577,7 @@ document.addEventListener('keydown',e=>{
 /* ═══ Запуск ═════════════════════════════ */
 applyLang();
 newGame();
-loadNetLib();   /* тихо предзагружаем библиотеку связи, к моменту клика она уже будет готова */
+loadNetLib();   /* тихо предзагружаем библиотеку связи к моменту клика */
 </script>
 </body>
 </html>
